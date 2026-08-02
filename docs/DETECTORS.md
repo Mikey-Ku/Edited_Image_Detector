@@ -66,6 +66,25 @@ tier with real mathematics, and it's where most classical forgery detection live
 - **Catches:** splices, copy-paste from another JPEG
 - **Misses:** edits that happen to land on a grid boundary (1 in 64); regions painted rather than pasted
 - **Cost:** 3 · **Localises:** YES
+- **✅ Implemented** as `compression.block_grid`. **Measured operating envelope** — narrower
+  than the literature implies, and worth stating plainly:
+  - The composite must be saved at **≥ ~q92**. At q88 detection fails completely (0 of ~100
+    readable windows misaligned) because the re-save's own origin-anchored grid overwrites
+    the foreign one. The evidence is gone from the pixels; no estimator recovers it.
+  - The donor must have been compressed at moderate-to-low quality, or there is no grid to read.
+  - The image needs texture. Heavy noise destroys the grid outright — JPEG spends its bits
+    encoding noise instead of quantising smooth blocks.
+- **Two implementation traps**, both of which produced a detector that fired on every image:
+  - **Raw step size is useless on textured content** — texture raises all eight phases
+    together. Measure the *excess* of a step over its immediate neighbours, which cancels
+    texture because busy content inflates a boundary and its neighbours equally.
+  - **The confidence ratio needs an absolute scale floor.** Normalising the phase peak by
+    the observed spread of the other seven diverges whenever they happen to agree, reading
+    as overwhelming confidence in what is actually a featureless region.
+- **Not yet verified:** the reported phase difference is *related* to the paste displacement
+  mod 8, but the geometric correspondence has not been checked against ground truth — on
+  synthetic splices the y component tracks the true displacement while x frequently reads
+  zero. Reported as an observed phase difference, not as a recovered paste offset.
 
 ### 2.3 JPEG ghosts
 - **Exploits:** re-save the image at every quality 1–100 and measure error. A region originally compressed at q=70 shows an **error minimum at 70** while the rest of the image doesn't.
@@ -254,7 +273,8 @@ Ordered by (value ÷ cost), not by tier:
 | **0** | 6.3, 6.4, 1.1 — claim-context consistency | ✅ done |
 | **1** | 1.3 preview mismatch · 2.4 ELA baseline · 3.3 noise inconsistency | ✅ done |
 | **1b** | multi-container support · **pre-edit recovery from embedded previews** | ✅ done |
-| **2** | 2.2 block-grid misalignment · 2.1 double-JPEG | ← next |
+| **2** | 2.2 block-grid misalignment | ✅ done |
+| **2b** | 2.1 double-JPEG | ← next |
 | **3** | 4.2 copy-move · 4.1 resampling | |
 | **4** | 3.1 PRNU · 3.2 CFA — the deep tier | |
 | **5** | 6.1 near-duplicate · **6.6 cross-claim rings** | the finale |

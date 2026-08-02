@@ -173,3 +173,88 @@ def stale_preview(
     piexif.insert(piexif.dump(exif), mb.getvalue(), out)
     path.write_bytes(out.getvalue())
     return path, mask
+
+
+def _textured_scene(shape: tuple[int, int], seed: int) -> np.ndarray:
+    """Content with enough detail for block artefacts to be readable.
+
+    A smooth gradient carries no blocking signature -- JPEG barely has to quantise
+    anything -- so grid-phase tests need real texture to measure against.
+    """
+    h, w = shape
+    rng = np.random.default_rng(seed)
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    img = 0.45 + 0.15 * np.sin(xx / 23.0) * np.cos(yy / 31.0)
+    img += 0.10 * np.sin((xx + yy) / 17.0)
+    # Sensor-realistic noise only. Heavy white noise destroys the block grid
+    # outright -- JPEG spends its bits encoding the noise instead of quantising
+    # smooth blocks -- so a noisy fixture tests nothing.
+    img += 0.015 * rng.normal(0, 1, (h, w)).astype(np.float32)
+    coarse = rng.normal(0, 1, (h // 24 + 1, w // 24 + 1)).astype(np.float32)
+    img += 0.18 * np.asarray(
+        Image.fromarray(((coarse - coarse.min()) / np.ptp(coarse) * 255).astype("uint8"))
+        .resize((w, h), Image.Resampling.BICUBIC),
+        dtype=np.float32,
+    ) / 255.0
+    return np.clip(img, 0.02, 0.98)
+
+
+def grid_splice(
+    path: Path,
+    shape: tuple[int, int] = (384, 512),
+    box: Box = (200, 120, 360, 264),
+    paste_offset: tuple[int, int] = (3, 5),
+    donor_quality: int = 60,
+    final_quality: int = 96,
+    seed: int = 21,
+) -> tuple[Path, np.ndarray]:
+    """A region carrying a JPEG block grid out of phase with its host.
+
+    The donor is compressed first, which bakes an 8x8 grid into its pixels. A crop
+    of it is then pasted at an offset that is not a multiple of 8, so the grid it
+    carries no longer lines up with the frame it lands in. Re-saving writes a
+    second grid on top without erasing the first.
+
+    ``paste_offset`` must not be (0, 0) mod 8 or the grids coincide and there is
+    nothing to detect -- which is the real 1-in-64 blind spot, not a test artefact.
+
+    Defaults sit inside the detector's measured operating envelope: the donor is
+    compressed hard enough to leave a strong grid, and the composite is saved at a
+    high enough quality that the new grid does not overwrite it. Outside that
+    envelope the technique genuinely fails -- see ``test_block_grid.py``.
+    """
+    host_arr = (np.stack([_textured_scene(shape, seed)] * 3, -1) * 255).astype("uint8")
+    donor_arr = (np.stack([_textured_scene(shape, seed + 101)] * 3, -1) * 255).astype(
+        "uint8"
+    )
+
+    # Compress the donor on its own so it acquires a grid anchored at ITS origin.
+    donor_jpeg = path.parent / f".donor_{path.stem}.jpg"
+    Image.fromarray(donor_arr).save(donor_jpeg, "JPEG", quality=donor_quality)
+    donor = np.asarray(Image.open(donor_jpeg).convert("RGB"))
+
+    x0, y0, x1, y1 = box
+    dx, dy = paste_offset
+    bh, bw = y1 - y0, x1 - x0
+
+    composite = host_arr.copy()
+    composite[y0:y1, x0:x1] = donor[y0 + dy : y0 + dy + bh, x0 + dx : x0 + dx + bw]
+
+    mask = np.zeros(shape, dtype=bool)
+    mask[y0:y1, x0:x1] = True
+
+    Image.fromarray(composite).save(path, "JPEG", quality=final_quality)
+    donor_jpeg.unlink(missing_ok=True)
+    return path, mask
+
+
+def grid_clean(
+    path: Path,
+    shape: tuple[int, int] = (384, 512),
+    quality: int = 90,
+    seed: int = 21,
+) -> tuple[Path, np.ndarray]:
+    """Textured, singly-compressed, unmanipulated. The negative control."""
+    arr = (np.stack([_textured_scene(shape, seed)] * 3, -1) * 255).astype("uint8")
+    Image.fromarray(arr).save(path, "JPEG", quality=quality)
+    return path, np.zeros(shape, dtype=bool)

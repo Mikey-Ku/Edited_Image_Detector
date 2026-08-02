@@ -99,13 +99,14 @@ boxed, and the raw localisation map.
 
 ## Status
 
-Working end-to-end. Five detectors, 52 tests.
+Working end-to-end. Six detectors, 65 tests.
 
 | Detector | Tier | Localises | State |
 |---|---|---|---|
 | `context.policy_consistency` | context | — | capture time vs. policy inception and loss date; GPS vs. loss location |
 | `metadata.container_identity` | metadata | — | magic bytes vs. filename; silent when nothing is anomalous |
 | `metadata.preview_mismatch` | metadata | ✅ | recovers the pre-edit original from an embedded preview |
+| `compression.block_grid` | compression | ✅ | 8×8 JPEG grid phase per window; flags regions carrying a foreign grid |
 | `compression.ela` | compression | ✅ | baseline only — deliberately capped at low confidence, see source |
 | `sensor.noise_inconsistency` | sensor | ✅ | MAD-based per-block noise estimation, adaptive structure exclusion, contiguity filter |
 
@@ -130,7 +131,13 @@ an edge case.
 comes first. Generative-AI detection is deliberately deferred until the classical stack is
 solid — see the scope note in [`docs/DETECTORS.md`](docs/DETECTORS.md).
 
-Next up: JPEG block-grid misalignment and double-compression detection.
+**Documented limits.** Every detector's failure envelope is measured and pinned in
+tests, not left to be discovered later. Block-grid analysis, for instance, fails entirely
+when the composite is saved below ~q92 — the re-save's own grid overwrites the foreign one,
+so the evidence is physically gone from the pixels. That is asserted as a test, because a
+detector whose failure modes are undocumented is one you cannot deploy.
+
+Next up: double-JPEG detection, then copy-move.
 
 ## Layout
 
