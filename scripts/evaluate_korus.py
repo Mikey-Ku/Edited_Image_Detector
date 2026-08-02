@@ -31,7 +31,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from groundtruth import Decision, ImageCase, analyse  # noqa: E402
+from groundtruth import ImageCase, analyse
 
 Image.MAX_IMAGE_PIXELS = None
 
