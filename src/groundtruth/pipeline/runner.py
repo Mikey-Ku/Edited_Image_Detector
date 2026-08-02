@@ -1,12 +1,13 @@
-"""Pipeline orchestration: run every applicable detector, then fuse."""
+"""Pipeline orchestration: run every applicable detector, fuse, localise."""
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ..core.detector import Detector, all_detectors
 from ..core.types import ImageCase, Verdict
+from ..fusion.localisation import fuse_heatmaps
 from ..fusion.weighted import fuse
 
 log = logging.getLogger(__name__)
@@ -20,6 +21,7 @@ def analyse(case: ImageCase, detectors: list[Detector] | None = None) -> Verdict
     the detectors that cannot speak to it rather than contributing noise.
     """
     detectors = detectors if detectors is not None else all_detectors()
+
     evidence = []
     for det in detectors:
         ev = det.run(case)
@@ -30,5 +32,13 @@ def analyse(case: ImageCase, detectors: list[Detector] | None = None) -> Verdict
         evidence.append(ev)
 
     verdict = fuse(evidence)
-    verdict.created_at = datetime.now(timezone.utc)
+
+    try:
+        shape = case.pixels().shape[:2]
+    except Exception:
+        log.exception("could not decode %s for localisation", case.image_path)
+    else:
+        verdict.heatmap, verdict.localised_by = fuse_heatmaps(evidence, shape)
+
+    verdict.created_at = datetime.now(UTC)
     return verdict

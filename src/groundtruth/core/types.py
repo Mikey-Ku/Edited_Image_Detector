@@ -143,6 +143,12 @@ class Verdict:
     explanation: str
     created_at: datetime | None = None
 
+    heatmap: np.ndarray | None = field(default=None, repr=False)
+    """Fused localisation over the full image, or None if nothing localised."""
+
+    localised_by: list[str] = field(default_factory=list)
+    """Detector ids that contributed to :attr:`heatmap`."""
+
     @property
     def firing(self) -> list[Evidence]:
         """Applicable detectors that actually found something, most suspicious first."""

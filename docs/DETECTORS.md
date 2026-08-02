@@ -226,31 +226,50 @@ the one an actual buyer evaluates.
 
 ---
 
+## Scope: classical manipulation first, generative detection deferred
+
+**Tier 5 is deliberately not being built yet.** Everything else — splicing, copy-move,
+retouching, resampling, recompression — is classical manipulation, and it is the right
+place to start for three reasons:
+
+1. **It is verifiable.** Classical forensics rests on properties of cameras and codecs
+   that we can construct ground truth for and measure against. Generative detection rests
+   on properties of models that change every few months.
+2. **The maths is settled.** Double-JPEG, PRNU, CFA, and resampling detection are
+   decades-old, well-founded results. We can implement them correctly and *prove* it.
+3. **It is still most of the real fraud.** Doctored claim photos are overwhelmingly
+   Photoshop-class edits — cloned-out damage, pasted damage, retouched severity.
+
+Tier 5 gets added once the classical stack is solid and measured. Building it first would
+mean chasing a moving target with no reliable baseline to compare against.
+
+---
+
 ## Build order
 
 Ordered by (value ÷ cost), not by tier:
 
-| Phase | Detectors | Why |
+| Phase | Detectors | Status |
 |---|---|---|
-| **0** | 6.3, 6.4, 1.1 | Trivial, dispositive, proves the pipeline end-to-end |
-| **1** | 1.3, 1.2, 6.1 | Cheap wins, first real localisation, first demo |
-| **2** | 5.1, 5.3, 5.4 | The AI story — the timely, headline capability |
-| **3** | 2.2, 2.1, 3.3 | Classical Photoshop detection, real mathematics |
-| **4** | 3.1, 3.2 | The deep tier — and unlocks 6.6 |
-| **5** | 6.6 | Cross-claim rings. The finale. |
-| **6** | 5.5 + generalisation experiment | The result that makes the writeup |
+| **0** | 6.3, 6.4, 1.1 — claim-context consistency | ✅ done |
+| **1** | 1.3 thumbnail · 2.4 ELA baseline · 3.3 noise inconsistency | ✅ done |
+| **2** | 2.2 block-grid misalignment · 2.1 double-JPEG | ← next |
+| **3** | 4.2 copy-move · 4.1 resampling | |
+| **4** | 3.1 PRNU · 3.2 CFA — the deep tier | |
+| **5** | 6.1 near-duplicate · **6.6 cross-claim rings** | the finale |
+| *later* | Tier 5 generative + generalisation experiment | deferred, see above |
 
-**Ship Phase 0–2 before touching Phase 3.** A working end-to-end system with five detectors
-beats a half-finished system with twenty.
+**Ship a working end-to-end system before deepening any single detector.** Five detectors
+that work and are measured beat twenty that are half-finished.
 
 ---
 
 ## The experiment that makes the project
 
-Train the learned detector (5.5) on one generator. Evaluate on a *held-out* generator.
-Show accuracy collapsing toward chance — while the physics-based detectors (3.2, 5.1, 2.2)
-hold, because they exploit properties of *how cameras and generators physically work*
-rather than of one model's output distribution.
+Once Phase 4 lands, the argument writes itself: hold out entire *manipulation tools* rather
+than random samples, and show that detectors grounded in camera physics (PRNU, CFA,
+block-grid) transfer to tools they never saw, while a learned real/fake classifier trained
+on one tool collapses toward chance on another.
 
-That is a real, publishable finding, it is the strongest possible argument for the whole
-architecture, and it is exactly the kind of result nobody in a portfolio project produces.
+That is a real result, it is the strongest possible argument for this architecture, and it
+is exactly the kind of finding nobody in a portfolio project produces.

@@ -27,5 +27,11 @@ line-length = 95
 target-version = "py311"
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
 testpaths = ["tests"]
+
+[tool.ruff.lint]
+# Broad excepts are intentional in the detector wrapper and in metadata parsing:
+# a detector that raises must degrade to "produced no evidence", never take down
+# the pipeline, and malformed EXIF in the wild is the norm rather than the exception.
+ignore = ["BLE001", "S110"]

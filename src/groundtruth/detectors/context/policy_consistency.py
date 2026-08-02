@@ -34,7 +34,11 @@ def _read_capture_datetime(img: Image.Image) -> datetime | None:
     if not raw:
         return None
     try:
-        return datetime.strptime(str(raw).strip(), "%Y:%m:%d %H:%M:%S")
+        # Naive by design. EXIF DateTimeOriginal carries no zone -- the offset lives
+        # in a separate optional tag most cameras omit. Attaching a zone here would
+        # invent information we do not have, and every comparison downstream is
+        # against a date, where a one-day ambiguity is already the honest resolution.
+        return datetime.strptime(str(raw).strip(), "%Y:%m:%d %H:%M:%S")  # noqa: DTZ007
     except ValueError:
         return None
 

@@ -1,1 +1,1 @@
-"""Not yet implemented -- see docs/DETECTORS.md for the build order."""
+from .noise_inconsistency import NoiseInconsistencyDetector  # noqa: F401

@@ -42,10 +42,50 @@ spanning supposedly-unrelated claimants is a **fraud ring**.
 Each of those claims passes every check on its own. The fraud exists only in the
 relationships between them.
 
+## Usage
+
+```bash
+pip install -e ".[dev]"
+groundtruth photo.jpg --render overlay.png \
+    --policy-inception 2026-03-01 --loss-date 2026-06-15
+```
+
+```
+decision:       FLAG
+P(manipulated): 0.793
+
+Manipulation indicated. P(manipulated) = 0.79 at confidence 0.63.
+Contributing findings:
+  - 14 of 163 measurable blocks have a noise level inconsistent with the rest
+    of the frame (max deviation 6.8 sigma)  [sensor.noise_inconsistency]
+
+regions of interest: 1
+  bbox=(320,128)-(447,255)  6.77% of frame  peak=0.87
+```
+
+`--render` writes a three-panel PNG — original, heatmap overlay with regions of interest
+boxed, and the raw localisation map.
+
 ## Status
 
-🚧 Early. See [`docs/DETECTORS.md`](docs/DETECTORS.md) for the full detector catalogue and
-build order, and [`docs/DESIGN.md`](docs/DESIGN.md) for architecture.
+Working end-to-end. Four detectors, 26 tests.
+
+| Detector | Tier | Localises | State |
+|---|---|---|---|
+| `context.policy_consistency` | context | — | capture time vs. policy inception and loss date; GPS vs. loss location |
+| `metadata.thumbnail_mismatch` | metadata | ✅ | diffs the stale EXIF preview against the image |
+| `compression.ela` | compression | ✅ | baseline only — deliberately capped at low confidence, see source |
+| `sensor.noise_inconsistency` | sensor | ✅ | MAD-based per-block noise estimation, adaptive structure exclusion, contiguity filter |
+
+**Verified against synthetic splices with pixel-exact masks:** a noise splice at JPEG q=96
+is flagged with a localisation hit rate of **0.99** and IoU **0.59**; the matching pristine
+image auto-clears. Detection holds down to q=75. See `tests/test_detection.py`.
+
+**Scope:** classical manipulation detection (splicing, copy-move, retouching, resampling)
+comes first. Generative-AI detection is deliberately deferred until the classical stack is
+solid — see the scope note in [`docs/DETECTORS.md`](docs/DETECTORS.md).
+
+Next up: JPEG block-grid misalignment and double-compression detection.
 
 ## Layout
 
@@ -55,7 +95,8 @@ docs/DESIGN.md         architecture and evaluation protocol
 src/groundtruth/
   core/                types, detector interface, registry
   detectors/           metadata · compression · sensor · geometric · generative · context
-  fusion/              calibrated combination + abstention
+  fusion/              weighted combination, abstention, heatmap pooling
   pipeline/            orchestration
-  api/                 service layer
+  api/                 CLI and overlay rendering
+tests/fixtures.py      synthetic manipulations with pixel-exact ground-truth masks
 ```
