@@ -123,12 +123,31 @@ Working end-to-end. Six detectors, 65 tests.
 | `compression.ela` | compression | ✅ | baseline only — deliberately capped at low confidence, see source |
 | `sensor.noise_inconsistency` | sensor | ✅ | MAD-based per-block noise estimation, adaptive structure exclusion, contiguity filter |
 
-**Verified against synthetic manipulations with pixel-exact masks.** A noise splice at
-JPEG q=96 is flagged with a localisation hit rate of **0.99** and IoU **0.59**; the matching
-pristine image auto-clears; detection holds to q=75. A stale-preview edit recovers the
-original and localises the change to within 12px of ground truth, with the unedited control
-reporting <1% changed. Every detection test has a matching negative control — see
-`tests/test_detection.py` and `tests/test_recovery.py`.
+### ⚠️ Real-data result: this does not work yet
+
+Evaluated on 112 tampered + 112 matched pristine originals from the **Korus Realistic
+Tampering Dataset** — real photographs, hand-manipulated in GIMP and Affinity Photo:
+
+| | synthetic fixtures | real photographs |
+|---|---|---|
+| localisation hit rate | 0.99 | **0.010** |
+| clean images auto-cleared | 100% | **0%** |
+| tampered flagged | 100% | 18.8% |
+| pristine **falsely** flagged | 0% | **19.6%** |
+
+The false positive rate exceeds the true positive rate and the two score distributions are
+indistinguishable. **This is chance performance.**
+
+Root cause: the noise detector assumes one global noise level per image, but photon shot
+noise scales with the square root of signal, so bright regions of an *unmanipulated* photo
+are legitimately noisier than dark ones. The synthetic fixture generated uniform noise —
+**encoding the same false assumption the detector makes** — so the test could not fail.
+
+Full analysis, including the matched-pair diagnostic, in [`docs/FINDINGS.md`](docs/FINDINGS.md).
+
+**Every synthetic number in this repository should be read as an implementation check, not
+as performance.** They verify a detector fires in the right place *given its assumptions*;
+only real data tests whether those assumptions hold.
 
 ## Containers
 
