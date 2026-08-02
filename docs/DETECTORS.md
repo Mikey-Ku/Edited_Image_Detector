@@ -252,7 +252,8 @@ Ordered by (value ÷ cost), not by tier:
 | Phase | Detectors | Status |
 |---|---|---|
 | **0** | 6.3, 6.4, 1.1 — claim-context consistency | ✅ done |
-| **1** | 1.3 thumbnail · 2.4 ELA baseline · 3.3 noise inconsistency | ✅ done |
+| **1** | 1.3 preview mismatch · 2.4 ELA baseline · 3.3 noise inconsistency | ✅ done |
+| **1b** | multi-container support · **pre-edit recovery from embedded previews** | ✅ done |
 | **2** | 2.2 block-grid misalignment · 2.1 double-JPEG | ← next |
 | **3** | 4.2 copy-move · 4.1 resampling | |
 | **4** | 3.1 PRNU · 3.2 CFA — the deep tier | |

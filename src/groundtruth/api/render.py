@@ -84,3 +84,54 @@ def render_verdict(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(out_path)
     return out_path
+
+
+_LABEL_BG = (18, 18, 20)
+_LABEL_FG = (235, 235, 240)
+_BAR = 26
+
+
+def _panel_grid(
+    panels: list[tuple[str, np.ndarray]], gap: int = 8
+) -> tuple[Image.Image, int, int]:
+    """Lay panels out horizontally with a caption bar under each."""
+    h, w = panels[0][1].shape[:2]
+    canvas = Image.new(
+        "RGB", (w * len(panels) + gap * (len(panels) - 1), h + _BAR), _LABEL_BG
+    )
+    draw = ImageDraw.Draw(canvas)
+    for i, (label, arr) in enumerate(panels):
+        x = i * (w + gap)
+        canvas.paste(Image.fromarray(arr.astype(np.uint8)), (x, 0))
+        draw.text((x + 6, h + 6), label, fill=_LABEL_FG)
+    return canvas, w, gap
+
+
+def render_reconstruction(reconstruction, out_path: Path) -> Path:
+    """Four panels: recovered original, current image, what changed, and where.
+
+    The caption states the fidelity explicitly. Someone looking at this needs to
+    know at a glance whether the left panel is real recovered pixels or a model's
+    guess -- presenting the two identically would be the single most misleading
+    thing this tool could do.
+    """
+    r = reconstruction
+    diff = r.difference
+
+    panels = [
+        (f"BEFORE ({r.fidelity.value}, {r.preview_size[0]}x{r.preview_size[1]})", r.before),
+        ("AFTER (current file)", r.after),
+        ("CHANGED", colourise(diff)),
+        ("REGIONS", overlay(r.after, diff)),
+    ]
+    canvas, w, gap = _panel_grid(panels)
+
+    draw = ImageDraw.Draw(canvas)
+    for region in r.regions[:6]:
+        x0, y0, x1, y1 = region["bbox"]
+        off = 3 * (w + gap)
+        draw.rectangle([x0 + off, y0, x1 + off, y1], outline=(80, 220, 255), width=3)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(out_path)
+    return out_path

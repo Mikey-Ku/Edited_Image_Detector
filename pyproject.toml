@@ -7,10 +7,15 @@ dependencies = [
     "numpy>=1.26",
     "pillow>=10.2",
     "scipy>=1.12",
+    # HEIC is the iPhone default since 2017, so in a claims pipeline it is the
+    # common case rather than an edge case.
+    "pillow-heif>=0.15",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.4"]
+# piexif is test-only: it writes EXIF thumbnails, which is how we build a
+# realistic "editor forgot to regenerate the preview" fixture.
+dev = ["pytest>=8.0", "ruff>=0.4", "piexif>=1.1"]
 
 [project.scripts]
 groundtruth = "groundtruth.api.cli:main"

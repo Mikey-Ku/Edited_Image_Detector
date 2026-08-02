@@ -21,6 +21,9 @@ from typing import Any
 
 import numpy as np
 
+from .image_io import Container, ContainerInfo, load_rgb
+from .image_io import inspect as inspect_container
+
 
 class Tier(str, Enum):
     """Which physical or statistical property the detector exploits."""
@@ -81,22 +84,32 @@ class ImageCase:
     image_path: Path
     context: ClaimContext | None = None
     _pixels: np.ndarray | None = field(default=None, repr=False)
+    _container: ContainerInfo | None = field(default=None, repr=False)
 
     @property
     def suffix(self) -> str:
         return self.image_path.suffix.lower()
 
     @property
+    def container(self) -> ContainerInfo:
+        """What the file actually is, decided by magic bytes rather than by name."""
+        if self._container is None:
+            self._container = inspect_container(self.image_path)
+        return self._container
+
+    @property
     def is_jpeg(self) -> bool:
-        return self.suffix in {".jpg", ".jpeg"}
+        return self.container.actual is Container.JPEG
+
+    @property
+    def is_lossy(self) -> bool:
+        """Whether compression forensics can say anything about this container."""
+        return self.container.actual.lossy
 
     def pixels(self) -> np.ndarray:
         """Lazily decoded RGB array, cached across detectors."""
         if self._pixels is None:
-            from PIL import Image
-
-            with Image.open(self.image_path) as im:
-                self._pixels = np.asarray(im.convert("RGB"))
+            self._pixels = load_rgb(self.image_path)
         return self._pixels
 
 

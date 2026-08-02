@@ -57,7 +57,10 @@ class ELADetector(Detector):
 
     def applies_to(self, case: ImageCase) -> tuple[bool, str]:
         if not case.is_jpeg:
-            return False, "ELA is only interpretable on JPEG-compressed input"
+            return False, (
+                f"ELA is only interpretable on JPEG input; this is "
+                f"{case.container.actual.value}"
+            )
         return True, ""
 
     def _run(self, case: ImageCase) -> Evidence:

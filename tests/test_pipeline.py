@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from groundtruth import ClaimContext, Decision, ImageCase, analyse
+from groundtruth import ClaimContext, Decision, Evidence, ImageCase, analyse
 from groundtruth.core.detector import all_detectors
 
 
@@ -37,8 +37,13 @@ def claim() -> ClaimContext:
 
 def test_detectors_are_registered():
     ids = {d.id for d in all_detectors()}
-    assert "context.policy_consistency" in ids
-    assert "metadata.thumbnail_mismatch" in ids
+    assert {
+        "context.policy_consistency",
+        "metadata.container_identity",
+        "metadata.preview_mismatch",
+        "compression.ela",
+        "sensor.noise_inconsistency",
+    } <= ids
 
 
 def test_detectors_run_cheapest_first():
@@ -83,17 +88,44 @@ def test_photo_before_loss_date_is_suspicious(tmp_path, claim):
     assert ev.details["days_before_loss"] == 45
 
 
-def test_thumbnail_detector_skips_non_jpeg(tmp_path, claim):
+def test_ela_skips_non_jpeg_container(tmp_path, claim):
     png = tmp_path / "shot.png"
     Image.fromarray(np.zeros((64, 64, 3), "uint8")).save(png)
 
     ev = next(
         e
         for e in analyse(ImageCase(image_path=png, context=claim)).evidence
-        if e.detector_id == "metadata.thumbnail_mismatch"
+        if e.detector_id == "compression.ela"
     )
     assert not ev.applicable
-    assert "JPEG" in ev.explanation
+    assert "png" in ev.explanation
+
+
+def test_container_detector_is_silent_on_ordinary_files(tmp_path, claim):
+    """A JPEG named .jpg is the default, not evidence. It must not dilute fusion."""
+    img = _write_jpeg(tmp_path / "ordinary.jpg", captured="2026:06:16 14:02:00")
+
+    ev = next(
+        e
+        for e in analyse(ImageCase(image_path=img, context=claim)).evidence
+        if e.detector_id == "metadata.container_identity"
+    )
+    assert not ev.applicable
+
+
+def test_container_detector_catches_extension_lie(tmp_path, claim):
+    """Bytes are PNG, name says .jpg -- the file was converted or re-saved."""
+    liar = tmp_path / "damage.jpg"
+    Image.fromarray(np.zeros((64, 64, 3), "uint8")).save(liar, "PNG")
+
+    ev = next(
+        e
+        for e in analyse(ImageCase(image_path=liar, context=claim)).evidence
+        if e.detector_id == "metadata.container_identity"
+    )
+    assert ev.applicable
+    assert ev.score > 0.6
+    assert ev.details["actual"] == "png" and ev.details["claimed"] == "jpeg"
 
 
 def test_no_claim_context_drops_context_detector(tmp_path):
@@ -107,13 +139,30 @@ def test_no_claim_context_drops_context_detector(tmp_path):
     assert not ev.applicable
 
 
-def test_verdict_with_no_usable_evidence_routes_to_human(tmp_path):
+def test_fusion_with_no_usable_evidence_routes_to_human():
     """Inapplicable detectors must be excluded, not folded in as neutral."""
-    png = tmp_path / "bare.png"
-    Image.fromarray(np.zeros((64, 64, 3), "uint8")).save(png)
+    from groundtruth.core.types import Tier
+    from groundtruth.fusion.weighted import fuse
 
-    verdict = analyse(ImageCase(image_path=png))
+    verdict = fuse(
+        [
+            Evidence.not_applicable("a", Tier.METADATA, "nope"),
+            Evidence.not_applicable("b", Tier.SENSOR, "also nope"),
+        ]
+    )
 
     assert verdict.decision is Decision.ROUTE_TO_HUMAN
     assert verdict.manipulated_probability == pytest.approx(0.5)
-    assert not any(e.applicable for e in verdict.evidence)
+
+
+def test_zero_confidence_evidence_is_excluded_from_fusion():
+    """Confidence 0 means 'I have no opinion' and must not move the score."""
+    from groundtruth.core.types import Tier
+    from groundtruth.fusion.weighted import fuse
+
+    strong = Evidence("real", Tier.SENSOR, True, score=0.95, confidence=0.9)
+    mute = Evidence("mute", Tier.METADATA, True, score=0.05, confidence=0.0)
+
+    assert fuse([strong, mute]).manipulated_probability == pytest.approx(
+        fuse([strong]).manipulated_probability
+    )

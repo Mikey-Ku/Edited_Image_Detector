@@ -9,7 +9,8 @@ from pathlib import Path
 from ..core.types import ClaimContext, ImageCase
 from ..fusion.localisation import peak_regions
 from ..pipeline.runner import analyse
-from .render import render_verdict
+from ..recovery.reconstruct import reconstruct
+from .render import render_reconstruction, render_verdict
 
 
 def main() -> int:
@@ -24,6 +25,13 @@ def main() -> int:
         type=Path,
         metavar="OUT.png",
         help="write a three-panel PNG: original | overlay | heatmap",
+    )
+    p.add_argument(
+        "--recover",
+        type=Path,
+        metavar="OUT.png",
+        help="recover the pre-edit image from an embedded preview and write "
+        "a four-panel comparison",
     )
     args = p.parse_args()
 
@@ -42,9 +50,13 @@ def main() -> int:
         else None
     )
 
-    verdict = analyse(ImageCase(image_path=args.image, context=context))
+    case = ImageCase(image_path=args.image, context=context)
+    verdict = analyse(case)
 
+    info = case.container
     print(f"\n{args.image.name}")
+    print(f"container:      {info.actual.value}", end="")
+    print(f"  (named .{info.claimed.value})" if info.extension_mismatch else "")
     print(f"decision:       {verdict.decision.value.upper()}")
     print(f"P(manipulated): {verdict.manipulated_probability:.3f}\n")
     print(verdict.explanation)
@@ -74,6 +86,19 @@ def main() -> int:
     if args.render:
         out = render_verdict(args.image, verdict, args.render)
         print(f"\nwrote {out}" if out else "\nnothing to render (no heatmap)")
+
+    if args.recover:
+        recon = reconstruct(args.image)
+        if recon is None:
+            print("\nno embedded preview: the pre-edit image cannot be recovered")
+        else:
+            print(f"\nrecovered pre-edit image [{recon.fidelity.value}]")
+            print(f"  source:  {recon.source} at {recon.preview_size[0]}x{recon.preview_size[1]}")
+            print(f"  changed: {recon.changed_fraction:.2%} of the frame")
+            if recon.cropped:
+                print("  cropped: yes -- content outside the current frame is gone")
+            print(f"  {recon.caveat}")
+            print(f"\nwrote {render_reconstruction(recon, args.recover)}")
 
     return 0
 

@@ -33,6 +33,37 @@ None of these depend on which generator produced the fake, because they're prope
 On top of the forensics sits the layer that actually catches fraud: **claim context.**
 A pixel-perfect authentic photo is still fraud if its EXIF timestamp predates the policy.
 
+## Recovering the original
+
+Often you don't have to infer what changed — **you can show it.**
+
+Containers carry a second copy of the image: an EXIF thumbnail in a JPEG, a thumbnail item
+in a HEIC, a reduced-resolution SubIFD in a TIFF, an embedded JPEG in most RAW files. Many
+editors rewrite the main image and leave that copy untouched.
+
+When that happens, **the preview is a photograph of the pre-edit original.** Not a
+reconstruction, not a model's guess — real pixels that are still sitting in the file.
+Diff the two and the edit localises itself.
+
+```
+groundtruth claim.jpg --recover before_after.png
+```
+
+```
+recovered pre-edit image [recovered]
+  source:  embedded_jpeg@0x59 at 160x120
+  changed: 8.78% of the frame
+```
+
+A 160×120 thumbnail — 6% of the current resolution — located a synthetic edit at
+`(379,151)-(560,300)` against a ground truth of `(380,150)-(560,300)`.
+
+**One invariant governs this whole module.** Every result carries a `Fidelity`:
+`RECOVERED` and `PARTIAL` are real pixels from the file and are evidence. `INFERRED` would
+mean a model's plausible guess about what *might* have been there — a hypothesis, never
+evidence. Nothing synthesised may ever be presented as recovered, and the distinction is
+carried through the type system, the renderer's captions, and the tests.
+
 ## The capability this is built toward
 
 Sensor fingerprinting doesn't just localise tampering — it **identifies the individual
@@ -68,18 +99,32 @@ boxed, and the raw localisation map.
 
 ## Status
 
-Working end-to-end. Four detectors, 26 tests.
+Working end-to-end. Five detectors, 52 tests.
 
 | Detector | Tier | Localises | State |
 |---|---|---|---|
 | `context.policy_consistency` | context | — | capture time vs. policy inception and loss date; GPS vs. loss location |
-| `metadata.thumbnail_mismatch` | metadata | ✅ | diffs the stale EXIF preview against the image |
+| `metadata.container_identity` | metadata | — | magic bytes vs. filename; silent when nothing is anomalous |
+| `metadata.preview_mismatch` | metadata | ✅ | recovers the pre-edit original from an embedded preview |
 | `compression.ela` | compression | ✅ | baseline only — deliberately capped at low confidence, see source |
 | `sensor.noise_inconsistency` | sensor | ✅ | MAD-based per-block noise estimation, adaptive structure exclusion, contiguity filter |
 
-**Verified against synthetic splices with pixel-exact masks:** a noise splice at JPEG q=96
-is flagged with a localisation hit rate of **0.99** and IoU **0.59**; the matching pristine
-image auto-clears. Detection holds down to q=75. See `tests/test_detection.py`.
+**Verified against synthetic manipulations with pixel-exact masks.** A noise splice at
+JPEG q=96 is flagged with a localisation hit rate of **0.99** and IoU **0.59**; the matching
+pristine image auto-clears; detection holds to q=75. A stale-preview edit recovers the
+original and localises the change to within 12px of ground truth, with the unedited control
+reporting <1% changed. Every detection test has a matching negative control — see
+`tests/test_detection.py` and `tests/test_recovery.py`.
+
+## Containers
+
+Format is decided by **magic bytes, never by file extension** — the extension is metadata a
+user controls, and a `damage.jpg` whose bytes are a PNG has been through a conversion the
+claimant did not mention. That disagreement is itself reported as a finding.
+
+JPEG · PNG · WebP · TIFF · **HEIC/HEIF** · BMP · GIF. HEIC matters more than it looks: it
+has been the iPhone default since 2017, so in a claims pipeline it is the common case, not
+an edge case.
 
 **Scope:** classical manipulation detection (splicing, copy-move, retouching, resampling)
 comes first. Generative-AI detection is deliberately deferred until the classical stack is
@@ -95,6 +140,7 @@ docs/DESIGN.md         architecture and evaluation protocol
 src/groundtruth/
   core/                types, detector interface, registry
   detectors/           metadata · compression · sensor · geometric · generative · context
+  recovery/            embedded-preview extraction and pre-edit reconstruction
   fusion/              weighted combination, abstention, heatmap pooling
   pipeline/            orchestration
   api/                 CLI and overlay rendering

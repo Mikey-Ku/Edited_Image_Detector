@@ -114,3 +114,62 @@ def hit_rate(heat: np.ndarray, mask: np.ndarray, threshold: float = 0.5) -> floa
     pred = heat >= threshold
     total = int(pred.sum())
     return float((pred & mask).sum() / total) if total else 0.0
+
+
+def stale_preview(
+    path: Path,
+    shape: tuple[int, int] = (480, 640),
+    edit_box: Box = (380, 150, 560, 300),
+    thumb_size: tuple[int, int] = (160, 120),
+    crop_to: Box | None = None,
+    edit: bool = True,
+    seed: int = 3,
+) -> tuple[Path, np.ndarray]:
+    """A JPEG whose EXIF thumbnail still shows the UNEDITED original.
+
+    This is the real-world failure that makes recovery possible: an editor rewrites
+    the main image and leaves the embedded preview alone, so the container is still
+    carrying a photograph of the original.
+
+    Set ``edit=False`` for the negative control -- preview and image agree.
+    """
+    import io
+
+    import piexif
+
+    scene = _scene(shape, seed)
+    original = (np.stack([_with_noise(scene, 0.02, seed)] * 3, -1) * 255).astype("uint8")
+
+    # The thumbnail is made from the ORIGINAL, before any edit.
+    tb = io.BytesIO()
+    Image.fromarray(original).resize(thumb_size, Image.Resampling.LANCZOS).save(
+        tb, "JPEG", quality=70
+    )
+
+    current = original.copy()
+    mask = np.zeros(shape, dtype=bool)
+    if edit:
+        x0, y0, x1, y1 = edit_box
+        current[y0:y1, x0:x1] = np.clip(
+            current[y0:y1, x0:x1].astype(int) + 70, 0, 255
+        ).astype("uint8")
+        mask[y0:y1, x0:x1] = True
+    if crop_to is not None:
+        x0, y0, x1, y1 = crop_to
+        current = current[y0:y1, x0:x1]
+        mask = mask[y0:y1, x0:x1]
+
+    mb = io.BytesIO()
+    Image.fromarray(current).save(mb, "JPEG", quality=92)
+
+    exif = {
+        "0th": {piexif.ImageIFD.Software: b"Adobe Photoshop 26.0"},
+        "Exif": {},
+        "GPS": {},
+        "1st": {},
+        "thumbnail": tb.getvalue(),
+    }
+    out = io.BytesIO()
+    piexif.insert(piexif.dump(exif), mb.getvalue(), out)
+    path.write_bytes(out.getvalue())
+    return path, mask
