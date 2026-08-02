@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ground Truth — image forensics</title>
+<style>
+  :root {
+    --bg: #0e0f13; --panel: #16181f; --panel-2: #1c1f28; --line: #262a35;
+    --fg: #e7e9ef; --dim: #8a90a2; --dimmer: #5c6172;
+    --flag: #ff5c5c; --clear: #35d08a; --human: #f0b849; --accent: #4fc3f7;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  }
+  header {
+    padding: 20px 28px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  }
+  h1 { margin: 0; font-size: 19px; letter-spacing: -0.2px; }
+  .sub { color: var(--dim); font-size: 13px; }
+  main { max-width: 1280px; margin: 0 auto; padding: 24px 28px 80px; }
+
+  .drop {
+    border: 1.5px dashed var(--line); border-radius: 12px; padding: 44px 24px;
+    text-align: center; cursor: pointer; transition: .15s; background: var(--panel);
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--panel-2); }
+  .drop strong { display: block; font-size: 16px; margin-bottom: 6px; }
+  .drop span { color: var(--dim); font-size: 13px; }
+
+  .ctx { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0 0; }
+  .ctx label { font-size: 12px; color: var(--dim); display: flex; flex-direction: column; gap: 4px; }
+  .ctx input {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--fg);
+    border-radius: 7px; padding: 7px 10px; font-size: 13px; font-family: inherit;
+  }
+
+  .verdict {
+    margin-top: 24px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--panel); overflow: hidden;
+  }
+  .verdict-head {
+    padding: 18px 22px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    border-left: 4px solid var(--dimmer);
+  }
+  .verdict-head.flag { border-left-color: var(--flag); }
+  .verdict-head.auto_clear { border-left-color: var(--clear); }
+  .verdict-head.route_to_human { border-left-color: var(--human); }
+  .badge { font-size: 17px; font-weight: 650; letter-spacing: .3px; }
+  .badge.flag { color: var(--flag); }
+  .badge.auto_clear { color: var(--clear); }
+  .badge.route_to_human { color: var(--human); }
+  .prob { font-family: var(--mono); font-size: 14px; color: var(--dim); }
+  .meta { margin-left: auto; font-size: 12px; color: var(--dimmer); font-family: var(--mono); }
+  pre.explain {
+    margin: 0; padding: 16px 22px; background: var(--panel-2);
+    border-top: 1px solid var(--line); white-space: pre-wrap;
+    font-family: var(--mono); font-size: 12.5px; color: var(--dim); line-height: 1.6;
+  }
+
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .9px;
+       color: var(--dimmer); margin: 32px 0 12px; font-weight: 600; }
+
+  .panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .panel img { width: 100%; display: block; }
+  .panel .cap { padding: 9px 12px; font-size: 11.5px; color: var(--dim);
+                border-top: 1px solid var(--line); font-family: var(--mono); }
+
+  .cards { display: grid; gap: 10px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; display: grid; gap: 8px;
+  }
+  .card.na { opacity: .5; }
+  .card-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .did { font-family: var(--mono); font-size: 13px; }
+  .tier { font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px;
+          color: var(--dimmer); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; }
+  .nums { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--dim); }
+  .bar { height: 4px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--dimmer); }
+  .why { font-size: 13.5px; color: var(--fg); }
+  .card.na .why { color: var(--dim); font-style: italic; }
+  details.det { font-size: 12px; color: var(--dim); }
+  details.det summary { cursor: pointer; color: var(--dimmer); font-size: 11.5px; }
+  details.det pre { font-family: var(--mono); font-size: 11.5px; overflow-x: auto;
+                    background: var(--panel-2); padding: 10px; border-radius: 6px; margin: 8px 0 0; }
+
+  .note { border-left: 3px solid var(--accent); background: var(--panel);
+          padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 13px; color: var(--dim); }
+  .note b { color: var(--fg); }
+  .evidence-tag { display: inline-block; font-family: var(--mono); font-size: 10.5px;
+                  padding: 2px 7px; border-radius: 4px; letter-spacing: .4px; }
+  .evidence-tag.recovered { background: rgba(53,208,138,.15); color: var(--clear); }
+  .evidence-tag.partial { background: rgba(240,184,73,.15); color: var(--human); }
+  .evidence-tag.inferred { background: rgba(255,92,92,.15); color: var(--flag); }
+
+  table.reg { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; }
+  table.reg th { text-align: left; color: var(--dimmer); font-weight: 500; padding: 6px 10px;
+                 border-bottom: 1px solid var(--line); font-size: 11px; text-transform: uppercase; }
+  table.reg td { padding: 6px 10px; border-bottom: 1px solid var(--line); color: var(--dim); }
+
+  .samples { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .samples b { width: 100%; font-size: 11px; text-transform: uppercase; letter-spacing: .8px;
+               color: var(--dimmer); font-weight: 600; }
+  .samples button {
+    background: var(--panel); border: 1px solid var(--line); color: var(--dim);
+    border-radius: 7px; padding: 7px 12px; font-size: 12.5px; cursor: pointer;
+    font-family: var(--mono); transition: .12s;
+  }
+  .samples button:hover { border-color: var(--accent); color: var(--fg); }
+
+  .spin { color: var(--dim); font-size: 13px; padding: 24px 0; }
+  .err { color: var(--flag); font-size: 13px; padding: 14px 0; }
+  #out[hidden] { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Ground Truth</h1>
+  <span class="sub">image manipulation forensics · physics-based detectors, not a classifier</span>
+</header>
+
+<main>
+  <div class="drop" id="drop">
+    <strong>Drop an image, or click to choose</strong>
+    <span>JPEG · PNG · WebP · TIFF · HEIC · BMP — container is read from magic bytes, not the filename</span>
+    <input type="file" id="file" accept="image/*,.heic,.heif,.tif,.tiff" hidden>
+  </div>
+
+  <div id="samples" class="samples"></div>
+
+  <div class="ctx">
+    <label>Claim ID<input id="claim_id" value="CLM-0001" size="12"></label>
+    <label>Claimant ID<input id="claimant_id" value="C-0001" size="12"></label>
+    <label>Policy inception<input id="policy_inception" type="date"></label>
+    <label>Loss date<input id="loss_date" type="date"></label>
+  </div>
+
+  <div id="status"></div>
+  <div id="out" hidden></div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const drop = $('#drop'), fileInput = $('#file'), out = $('#out'), status = $('#status');
+
+drop.onclick = () => fileInput.click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => {
+  e.preventDefault(); drop.classList.remove('over');
+  if (e.dataTransfer.files[0]) send(e.dataTransfer.files[0]);
+};
+fileInput.onchange = () => fileInput.files[0] && send(fileInput.files[0]);
+
+fetch('/api/samples').then(r => r.json()).then(list => {
+  if (!list.length) return;
+  const box = $('#samples');
+  box.innerHTML = '<b>or try a bundled example</b>';
+  for (const s of list) {
+    const b = document.createElement('button');
+    b.textContent = s.name;
+    b.title = s.blurb;
+    b.onclick = () => send(s.name);
+    box.appendChild(b);
+  }
+}).catch(() => {});
+
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => (
+  {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function send(fileOrSample) {
+  const isSample = typeof fileOrSample === 'string';
+  const label = isSample ? fileOrSample : fileOrSample.name;
+  out.hidden = true;
+  status.innerHTML = `<div class="spin">Analysing ${esc(label)} …</div>`;
+  const fd = new FormData();
+  if (isSample) fd.append('sample', fileOrSample);
+  else fd.append('file', fileOrSample);
+  for (const k of ['claim_id','claimant_id','policy_inception','loss_date'])
+    fd.append(k, $('#'+k).value || '');
+  try {
+    const r = await fetch('/api/analyse', { method: 'POST', body: fd });
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    render(await r.json());
+    status.innerHTML = '';
+  } catch (err) {
+    status.innerHTML = `<div class="err">${esc(err.message)}</div>`;
+  }
+}
+
+function panel(src, cap) {
+  return src ? `<div class="panel"><img src="${src}"><div class="cap">${esc(cap)}</div></div>` : '';
+}
+
+function card(e) {
+  const pct = Math.round(e.score * 100), conf = Math.round(e.confidence * 100);
+  const hue = e.score > .6 ? 'var(--flag)' : e.score < .4 ? 'var(--clear)' : 'var(--human)';
+  const details = Object.keys(e.details || {}).length
+    ? `<details class="det"><summary>measurements</summary><pre>${
+        esc(JSON.stringify(e.details, null, 2))}</pre></details>` : '';
+  return `<div class="card ${e.applicable ? '' : 'na'}">
+    <div class="card-top">
+      <span class="did">${esc(e.detector_id)}</span>
+      <span class="tier">${esc(e.tier)}</span>
+      ${e.localises ? '<span class="tier">localises</span>' : ''}
+      <span class="nums">${e.applicable ? `score ${e.score.toFixed(2)} · conf ${e.confidence.toFixed(2)}` : 'not applicable'}</span>
+    </div>
+    ${e.applicable ? `<div class="bar"><i style="width:${pct}%;background:${hue}"></i></div>
+      <div class="bar" title="confidence"><i style="width:${conf}%"></i></div>` : ''}
+    <div class="why">${esc(e.explanation)}</div>
+    ${details}</div>`;
+}
+
+function render(d) {
+  const v = d.verdict, dec = v.decision;
+  const label = dec.replace(/_/g, ' ').toUpperCase();
+  const mism = d.container.mismatch
+    ? ` · <span style="color:var(--flag)">named .${esc(d.container.claimed)}</span>` : '';
+
+  let html = `<div class="verdict">
+    <div class="verdict-head ${dec}">
+      <span class="badge ${dec}">${label}</span>
+      <span class="prob">P(manipulated) = ${v.probability.toFixed(3)}</span>
+      <span class="meta">${esc(d.filename)} · ${d.size[0]}×${d.size[1]} · ${esc(d.container.actual)}${mism}</span>
+    </div>
+    <pre class="explain">${esc(v.explanation)}</pre>
+  </div>`;
+
+  const imgs = d.images || {};
+  if (imgs.overlay || imgs.heatmap) {
+    html += `<h2>Localisation</h2><div class="panels">
+      ${panel(imgs.original, 'submitted image')}
+      ${panel(imgs.overlay, 'suspected regions')}
+      ${panel(imgs.heatmap, 'fused detector heatmap')}</div>`;
+  } else {
+    html += `<h2>Localisation</h2><div class="note">
+      No detector produced a localisation map for this image — that is a result, not a blank.
+      Nothing is being hidden.</div>`;
+  }
+
+  if (d.recovery) {
+    const r = d.recovery;
+    html += `<h2>Pre-edit recovery</h2>
+      <div class="note" style="margin-bottom:14px">
+        <span class="evidence-tag ${r.fidelity}">${r.fidelity.toUpperCase()}</span>
+        &nbsp;<b>${r.is_evidence ? 'Real pixels from the file.' : 'Synthesised — a hypothesis, not evidence.'}</b>
+        Source: <code>${esc(r.source)}</code> at ${r.preview_size[0]}×${r.preview_size[1]} ·
+        ${(r.changed_fraction*100).toFixed(2)}% of the frame changed${r.cropped ? ' · <b>cropped</b>' : ''}.
+        <br><span style="font-size:12px">${esc(r.caveat)}</span>
+      </div>
+      <div class="panels">
+        ${panel(imgs.before, 'BEFORE — recovered from embedded preview')}
+        ${panel(imgs.original, 'AFTER — current file')}
+        ${panel(imgs.changed, 'what changed')}</div>`;
+  }
+
+  if (d.regions && d.regions.length) {
+    html += `<h2>Regions of interest</h2><table class="reg">
+      <tr><th>bbox</th><th>area</th><th>% of frame</th><th>peak</th></tr>` +
+      d.regions.map(r => `<tr>
+        <td>(${r.bbox[0]},${r.bbox[1]}) – (${r.bbox[2]},${r.bbox[3]})</td>
+        <td>${r.area_px} px</td>
+        <td>${(r.area_fraction*100).toFixed(2)}%</td>
+        <td>${r.peak}</td></tr>`).join('') + `</table>`;
+  }
+
+  const applicable = d.evidence.filter(e => e.applicable);
+  const skipped = d.evidence.filter(e => !e.applicable);
+  html += `<h2>Evidence — ${applicable.length} of ${d.evidence.length} detectors applied</h2>
+    <div class="cards">${applicable.map(card).join('')}</div>`;
+  if (skipped.length) {
+    html += `<h2>Did not apply</h2><div class="cards">${skipped.map(card).join('')}</div>`;
+  }
+
+  out.innerHTML = html;
+  out.hidden = false;
+}
+</script>
+</body>
+</html>

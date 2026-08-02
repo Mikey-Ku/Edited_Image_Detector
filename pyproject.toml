@@ -12,7 +12,11 @@ dependencies = [
     "pillow-heif>=0.15",
 ]
 
+
+
 [project.optional-dependencies]
+# The review UI is optional -- the library and CLI need no web stack.
+ui = ["fastapi>=0.110", "uvicorn[standard]>=0.29", "python-multipart>=0.0.9"]
 # piexif is test-only: it writes EXIF thumbnails, which is how we build a
 # realistic "editor forgot to regenerate the preview" fixture.
 dev = ["pytest>=8.0", "ruff>=0.4", "piexif>=1.1"]
@@ -27,6 +31,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/groundtruth"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/groundtruth/api/static" = "groundtruth/api/static"
+
 [tool.ruff]
 line-length = 95
 target-version = "py311"
@@ -40,3 +47,8 @@ testpaths = ["tests"]
 # a detector that raises must degrade to "produced no evidence", never take down
 # the pipeline, and malformed EXIF in the wild is the norm rather than the exception.
 ignore = ["BLE001", "S110"]
+
+[tool.ruff.lint.per-file-ignores]
+# FastAPI's dependency system is *built* on calls in argument defaults --
+# File(), Form(), Depends(). B008 is correct advice everywhere except here.
+"src/groundtruth/api/server.py" = ["B008"]

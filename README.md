@@ -97,6 +97,19 @@ regions of interest: 1
 `--render` writes a three-panel PNG — original, heatmap overlay with regions of interest
 boxed, and the raw localisation map.
 
+### Review UI
+
+```bash
+pip install -e ".[ui]"
+uvicorn groundtruth.api.server:app --port 8420
+```
+
+Drag in an image, or click one of the bundled examples in `samples/`. The UI is deliberately
+a **review** tool rather than a verdict tool: every detector's score sits next to its
+confidence, its explanation, and its raw measurements, and detectors that did not apply are
+listed separately rather than hidden. A number without the reasoning behind it is exactly
+what an adjuster cannot act on.
+
 ## Status
 
 Working end-to-end. Six detectors, 65 tests.
