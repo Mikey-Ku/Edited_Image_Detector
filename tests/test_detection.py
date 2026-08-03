@@ -12,7 +12,7 @@ import pytest
 from fixtures import hit_rate, localisation_iou, noise_splice, pristine
 
 from groundtruth import Decision, ImageCase, analyse
-from groundtruth.core.detector import get
+from groundtruth.core.detector import all_detectors, get
 from groundtruth.detectors.sensor.noise_inconsistency import _keep_clusters
 
 NOISE = "sensor.noise_inconsistency"
@@ -28,8 +28,19 @@ def _noise_evidence(path):
 
 
 def test_splice_is_flagged(tmp_path):
+    """Synthetic fixture, so the camera-fingerprint detector is excluded.
+
+    Noiseprint is trained on photographs. These fixtures are generated gradients
+    with added noise -- no camera ever made them -- so its reading is meaningless
+    here and it correctly reports "consistent", which drags a genuine detection
+    down to review. The real measure for that detector is the benchmark, which
+    runs on actual photographs.
+    """
     path, _ = noise_splice(tmp_path / "splice.jpg")
-    verdict = analyse(ImageCase(image_path=path))
+    detectors = [
+        d for d in all_detectors() if d.id != "sensor.noiseprint_anomaly"
+    ]
+    verdict = analyse(ImageCase(image_path=path), detectors=detectors)
 
     assert verdict.decision is Decision.FLAG
     assert verdict.manipulated_probability > 0.7

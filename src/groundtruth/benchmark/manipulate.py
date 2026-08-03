@@ -258,7 +258,10 @@ def make(
     edited, mask = _apply(base, operation, box, rng, donor)
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = f"{operation}_{size:.3f}_{laundering}_{base_path.stem}"
+    # Size encoded in per-mille without a decimal point. `Path.with_suffix` treats
+    # everything after the last dot as the extension, so a stem containing "0.080"
+    # became "name_0.jpg" and every fixture for an operation overwrote the others.
+    stem = f"{operation}_{round(size * 1000):04d}_{laundering}_{base_path.stem}"
     path = _launder(Image.fromarray(edited), laundering, out_dir / stem)
 
     # Downscaling changes the frame, so the mask has to follow it or every

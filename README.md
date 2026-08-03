@@ -16,22 +16,45 @@ operation            0.5%      2.0%      8.0%     25.0%
 --------------------------------------------------------
 pristine        100% quiet   (control — must not flag)
 global_tone     100% quiet   (control — legitimate exposure lift)
-clone_out         75%/0.34  100%/0.49  100%/0.49  100%/0.50
-duplicate         75%/0.34  100%/0.49  100%/0.49  100%/0.50
+clone_out         75%/0.34  100%/0.58  100%/0.49  100%/0.50
+duplicate         75%/0.34  100%/0.58  100%/0.49  100%/0.50
+render_overlay     0%/0.37    0%/0.36   25%/0.98  100%/1.00
 splice_in          0%/0.02    0%/0.12    0%/0.45    0%/0.60
-render_overlay     0%/0.37    0%/0.36    0%/0.18    0%/0.22
-inpaint_out        0%/0.02    0%/0.07    0%/0.04    0%/0.06
+inpaint_out        0%/0.02    0%/0.46    0%/0.24    0%/0.51
 
-manipulations detected : 30/80  (38%)
+manipulations detected : 35/80  (44%)
 controls left alone    :   8/8  (100%)
 ```
 
-**Works:** copy-move — content cloned out or duplicated within a photograph.
-100% at 2% of frame and above, and it fires on nothing else (0/4 pristine,
-0/4 global_tone, 0/16 render_overlay). That specificity is the point.
+**Works:**
 
-**Does not work:** foreign content spliced in, rendered overlays such as a replaced
-licence plate, and removal by smooth fill.
+- **Copy-move** (`geometric.copy_move`) — content cloned out or duplicated within a
+  photograph. 100% at ≥2% of frame, and it fires on nothing else.
+- **Rendered overlays** (`sensor.noiseprint_anomaly`) — a replaced licence plate, a
+  pasted price. 100% at 25% of frame with **localisation 1.00**, and robust across
+  every laundering level tested: 2/2 at no-compression, q95, q85, q75, downscale and
+  PNG conversion, localisation 0.88–0.99 throughout.
+
+Both are specific. Neither fires on either control, and copy-move never fires on a
+rendered overlay nor the fingerprint detector on a duplication — they cover
+different manipulations rather than agreeing noisily.
+
+**Size is the binding limit, not laundering.** Measured on rendered overlays:
+
+| region size | detected |
+|---|---|
+| 0.5% of frame | 0/3 |
+| 1.0% | 1/3 |
+| 2.0% | 1/3 |
+| 4.0% | 2/3 |
+| 8.0% | 3/3 |
+
+A replaced licence plate in a real claim photo is around 1% of the frame — right at
+that edge. The fix is multi-scale analysis, since blocks are currently fixed at 32px
+with an area floor of 1.2%.
+
+**Does not work:** foreign content spliced in from another photograph, and removal by
+smooth fill.
 
 **Two detectors are quarantined as `experimental` and excluded from the pipeline**
 because the benchmark showed they never worked — see below. A detector earns its
