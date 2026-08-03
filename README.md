@@ -69,7 +69,7 @@ assumptions hold.
 **Every synthetic number in this repository is an implementation check, not a
 performance claim.** Full analysis in [`docs/DESIGN.md`](docs/DESIGN.md#evaluation-results).
 
-### Two detectors that never worked
+### Three detectors that did not survive measurement
 
 The benchmark exists because eyeballing single images kept producing false confidence.
 It immediately caught two:
@@ -84,7 +84,25 @@ beat chance, it finds nothing even on the splice it was built for.
 hand-replaced licence plate — but localises to the crumpled bumper and the tree line.
 **0% of flagged pixels inside the actual edit.**
 
-Both are still in the tree, documented, and excluded from the default pipeline.
+**`sensor.synthetic_region`** tested the conjunction those two failures suggested:
+a rendered graphic is *sharp **and** noiseless*, where crumpled metal is sharp and
+noisy. On one photograph it looked clean and selective. Swept across four, there is
+no operating point at all:
+
+| silence threshold | controls quiet | overlays detected |
+|---|---|---|
+| 0.8 | **0/8** | 4/4 |
+| 1.1 | 4/8 | 0/4 |
+| 1.4 | 8/8 | **0/4** |
+
+It goes straight from flagging every clean photograph to detecting nothing — the
+measurement does not separate the classes. Adding it took detection to 68% while
+dropping controls from 100% to 38%, which is not a trade worth making.
+
+All three are still in the tree, fully documented, and excluded from the default
+pipeline. **This is the pattern worth noticing:** physically-motivated cues keep
+looking convincing on one image and failing to be selective across several. That is
+what the benchmark is for.
 
 ---
 
