@@ -18,6 +18,22 @@ so that edges and texture -- which are outliers, not noise -- do not inflate it.
 MAD matters here. A plain standard deviation over a block containing an edge
 reports the edge, not the noise, and every texture boundary in the image becomes
 a false positive.
+
+**The noise level is not constant across a photograph, and assuming it is was
+this detector's central bug.** Photon arrival is Poisson, so shot noise grows with
+the square root of the signal: a brightly lit wall is genuinely noisier than a
+shadow in the same untouched frame. Measured against a single global level,
+hundreds of legitimate blocks deviate -- and they deviate identically in an edited
+image and its own unedited original, which is exactly what the Korus evaluation
+found (mean separation -0.065, the original scoring higher on 10 of 14 pairs).
+
+So the baseline is a fitted **noise level function** rather than a number:
+
+    sigma^2(mu) = a * mu + b
+
+fitted robustly across the frame, with `a` carrying shot noise and `b` the
+signal-independent read noise. A block is anomalous when it departs from the level
+predicted *for its own brightness*.
 """
 
 from __future__ import annotations
@@ -58,6 +74,12 @@ _MIN_CLUSTER_BLOCKS = 2
 
 _MIN_BLOCKS = 16
 
+# Iterations of reweighted fitting for the noise level function. A manipulated
+# region is an outlier to the model, so the fit is repeated with outliers
+# down-weighted -- otherwise a large splice drags the baseline toward itself and
+# hides in its own average.
+_NLF_ITERATIONS = 3
+
 
 def _haar_hh(gray: np.ndarray) -> np.ndarray:
     """Finest-scale diagonal detail coefficients (single-level Haar HH)."""
@@ -76,6 +98,35 @@ def _keep_clusters(mask: np.ndarray, min_size: int) -> np.ndarray:
     sizes = np.bincount(labelled.ravel())
     survivors = {i for i in range(1, count + 1) if sizes[i] >= min_size}
     return np.isin(labelled, list(survivors)) if survivors else np.zeros_like(mask)
+
+
+def _fit_noise_level(mu: np.ndarray, var: np.ndarray) -> tuple[float, float]:
+    """Robustly fit sigma^2 = a*mu + b across the frame.
+
+    Iteratively reweighted least squares: fit, measure residuals, down-weight the
+    blocks that disagree, refit. Without the reweighting a manipulated region large
+    enough to matter would bias the very baseline it is being compared against.
+    """
+    a, b = 0.0, float(np.median(var))
+    w = np.ones_like(mu)
+    for _ in range(_NLF_ITERATIONS):
+        sw = w.sum()
+        if sw < 1e-9:
+            break
+        mx = float((w * mu).sum() / sw)
+        my = float((w * var).sum() / sw)
+        cov = float((w * (mu - mx) * (var - my)).sum() / sw)
+        varx = float((w * (mu - mx) ** 2).sum() / sw)
+        a = cov / varx if varx > 1e-12 else 0.0
+        b = my - a * mx
+        resid = np.abs(var - (a * mu + b))
+        scale = float(np.median(resid)) * 1.4826 + 1e-9
+        w = 1.0 / (1.0 + (resid / (3.0 * scale)) ** 2)
+    # Noise variance cannot be negative; a downward-sloping fit means the model
+    # does not describe this image, so fall back to a flat baseline.
+    if a < 0:
+        a, b = 0.0, float(np.median(var))
+    return a, b
 
 
 def _blockwise(a: np.ndarray, block: int):
@@ -110,6 +161,7 @@ class NoiseInconsistencyDetector(Detector):
         ncols = hh.shape[1] // half
         sigma = np.full((nrows, ncols), np.nan, dtype=np.float32)
         structure = np.zeros((nrows, ncols), dtype=np.float32)
+        brightness = np.zeros((nrows, ncols), dtype=np.float32)
 
         smoothed = gaussian_filter(gray, sigma=_STRUCTURE_BLUR_SIGMA)
 
@@ -120,6 +172,7 @@ class NoiseInconsistencyDetector(Detector):
         for i, j, tile in _blockwise(smoothed, BLOCK):
             if i < nrows and j < ncols:
                 structure[i, j] = float(tile.std())
+                brightness[i, j] = float(tile.mean())
 
         measurable = np.isfinite(sigma) & (sigma > 1e-6)
         if not measurable.any():
@@ -137,14 +190,25 @@ class NoiseInconsistencyDetector(Detector):
                 f"only {int(valid.sum())} low-structure blocks; noise estimate unreliable",
             )
 
-        # Work in log space: noise scales multiplicatively with gain, so a splice
-        # from a higher-ISO source is a constant offset in logs, not in absolutes.
-        logs = np.log(sigma[valid])
-        centre = float(np.median(logs))
-        scale = float(np.median(np.abs(logs - centre))) * _MAD_TO_SIGMA + 1e-6
+        # Fit the noise level function, then judge each block against the level
+        # predicted for ITS OWN brightness rather than against a global constant.
+        a, b = _fit_noise_level(brightness[valid], (sigma[valid] ** 2).astype(np.float64))
+        predicted = np.maximum(a * brightness + b, 1e-12)
+
+        # Log ratio of observed to predicted: noise scales multiplicatively with
+        # gain, so a region from a different exposure is a constant offset in logs.
+        # Halved to express the deviation in SIGMA units rather than variance
+        # units. log(var ratio) is twice log(sigma ratio), and every threshold and
+        # spread constant downstream was calibrated against sigma.
+        ratio = np.zeros_like(sigma)
+        ratio[valid] = 0.5 * np.log(
+            np.maximum(sigma[valid] ** 2, 1e-12) / predicted[valid]
+        )
+        centre = float(np.median(ratio[valid]))
+        scale = float(np.median(np.abs(ratio[valid] - centre))) * _MAD_TO_SIGMA + 1e-6
 
         z = np.zeros_like(sigma)
-        z[valid] = np.abs(np.log(sigma[valid]) - centre) / scale
+        z[valid] = np.abs(ratio[valid] - centre) / scale
 
         flagged = valid & (z > _Z_ANOMALOUS)
         anomalous = _keep_clusters(flagged, _MIN_CLUSTER_BLOCKS)
@@ -207,8 +271,9 @@ class NoiseInconsistencyDetector(Detector):
                 "anomalous_blocks": int(anomalous.sum()),
                 "isolated_discarded": isolated,
                 "excluded_as_structured": int(measurable.sum()) - n_valid,
-                "median_sigma": round(float(np.exp(centre)), 6),
-                "log_sigma_spread": round(scale, 4),
+                "shot_noise_coeff": round(float(a), 8),
+                "read_noise_floor": round(float(b), 10),
+                "residual_spread": round(scale, 4),
                 "max_z": round(float(z.max()), 2),
             },
         )

@@ -10,6 +10,8 @@ dependencies = [
     # HEIC is the iPhone default since 2017, so in a claims pipeline it is the
     # common case rather than an edge case.
     "pillow-heif>=0.15",
+    # SIFT keypoints for copy-move detection. Nothing else in the project needs it.
+    "opencv-python-headless>=4.9",
 ]
 
 

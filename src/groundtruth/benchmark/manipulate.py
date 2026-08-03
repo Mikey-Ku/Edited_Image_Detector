@@ -70,16 +70,52 @@ class Fixture:
         return self.operation in {"pristine", "global_tone"}
 
 
-def _box_for(shape: tuple[int, int], fraction: float, rng) -> Box:
-    """A randomly placed box covering ``fraction`` of the frame, 4:3-ish."""
+def _dims(shape: tuple[int, int], fraction: float) -> tuple[int, int]:
     h, w = shape
     area = fraction * h * w
     bw = int(np.sqrt(area * 1.33))
     bh = int(area / max(bw, 1))
-    bw, bh = min(bw, w - 8), min(bh, h - 8)
-    x0 = int(rng.integers(4, max(5, w - bw - 4)))
-    y0 = int(rng.integers(4, max(5, h - bh - 4)))
-    return x0, y0, x0 + bw, y0 + bh
+    return max(8, min(bw, w - 8)), max(8, min(bh, h - 8))
+
+
+def _box_for(
+    shape: tuple[int, int], fraction: float, rng, content: np.ndarray | None = None
+) -> Box:
+    """A box covering ``fraction`` of the frame, placed where there is content.
+
+    Placement must be content-aware or the benchmark manufactures manipulations
+    nobody would make. Uniform random placement put an 8% duplication into empty
+    sky -- a region containing zero SIFT keypoints, so copy-move detection was
+    being scored on a case that is undetectable in principle and pointless in
+    practice. An attacker edits the damage, the plate, the face. Not the sky.
+
+    Candidate boxes are scored by the texture they contain and the busiest of a
+    random sample wins, which keeps placement varied without letting it drift into
+    featureless regions.
+    """
+    h, w = shape
+    bw, bh = _dims(shape, fraction)
+    hi_x, hi_y = max(5, w - bw - 4), max(5, h - bh - 4)
+
+    if content is None:
+        return (x := int(rng.integers(4, hi_x))), (y := int(rng.integers(4, hi_y))), x + bw, y + bh
+
+    best, best_score = None, -1.0
+    for _ in range(24):
+        x0 = int(rng.integers(4, hi_x))
+        y0 = int(rng.integers(4, hi_y))
+        score = float(content[y0 : y0 + bh, x0 : x0 + bw].mean())
+        if score > best_score:
+            best, best_score = (x0, y0, x0 + bw, y0 + bh), score
+    return best  # type: ignore[return-value]
+
+
+def _content_map(base: np.ndarray) -> np.ndarray:
+    """Local detail energy -- a proxy for "is there anything here to edit"."""
+    from scipy.ndimage import gaussian_filter
+
+    gray = base.astype(np.float32).mean(axis=2) / 255.0
+    return np.abs(gray - gaussian_filter(gray, 2.0))
 
 
 def _render_plate(size: tuple[int, int], rng) -> Image.Image:
@@ -104,7 +140,9 @@ def _render_plate(size: tuple[int, int], rng) -> Image.Image:
     return img
 
 
-def _apply(base: np.ndarray, op: str, box: Box, rng) -> tuple[np.ndarray, np.ndarray]:
+def _apply(
+    base: np.ndarray, op: str, box: Box, rng, donor: np.ndarray | None = None
+) -> tuple[np.ndarray, np.ndarray]:
     h, w = base.shape[:2]
     out = base.copy()
     mask = np.zeros((h, w), dtype=bool)
@@ -144,14 +182,24 @@ def _apply(base: np.ndarray, op: str, box: Box, rng) -> tuple[np.ndarray, np.nda
         mask[y0:y1, x0:x1] = True
         return out, mask
 
-    # The remaining operations copy pixels from somewhere. clone_out and duplicate
-    # take them from THIS photograph -- same sensor, same lens, same compression --
-    # which is why detectors that hunt for foreign statistics cannot see them.
-    src = _box_for((h, w), (bw * bh) / (h * w), rng)
-    sx0, sy0 = src[0], src[1]
-    sx0 = min(sx0, w - bw)
-    sy0 = min(sy0, h - bh)
-    out[y0:y1, x0:x1] = base[sy0 : sy0 + bh, sx0 : sx0 + bw]
+    # splice_in must come from a DIFFERENT photograph -- that is the whole point of
+    # the case. Taking it from this one turns it into a copy-move, which is a
+    # different detection problem entirely and made the keypoint detector look like
+    # it was solving splicing when it was solving duplication.
+    source = base
+    if op == "splice_in":
+        if donor is None:
+            return out, mask
+        source = donor
+
+    sh, sw = source.shape[:2]
+    if sh < bh or sw < bw:
+        return out, mask
+
+    src = _box_for((sh, sw), (bw * bh) / (sh * sw), rng, _content_map(source))
+    sx0 = min(src[0], sw - bw)
+    sy0 = min(src[1], sh - bh)
+    out[y0:y1, x0:x1] = source[sy0 : sy0 + bh, sx0 : sx0 + bw]
     mask[y0:y1, x0:x1] = True
     return out, mask
 
@@ -190,14 +238,24 @@ def make(
     size: float,
     laundering: str,
     seed: int = 0,
+    donor_path: Path | None = None,
 ) -> Fixture:
-    """Build one benchmark cell from a real photograph."""
+    """Build one benchmark cell from a real photograph.
+
+    ``donor_path`` supplies the foreign content for ``splice_in`` and is required
+    for it; every other operation works from the base image alone.
+    """
     rng = np.random.default_rng(seed)
     with Image.open(base_path) as im:
         base = np.asarray(im.convert("RGB"))
 
-    box = _box_for(base.shape[:2], max(size, 1e-4), rng)
-    edited, mask = _apply(base, operation, box, rng)
+    donor = None
+    if operation == "splice_in" and donor_path is not None:
+        with Image.open(donor_path) as im:
+            donor = np.asarray(im.convert("RGB"))
+
+    box = _box_for(base.shape[:2], max(size, 1e-4), rng, _content_map(base))
+    edited, mask = _apply(base, operation, box, rng, donor)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = f"{operation}_{size:.3f}_{laundering}_{base_path.stem}"

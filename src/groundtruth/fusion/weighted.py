@@ -58,14 +58,20 @@ def fuse(evidence: list[Evidence]) -> Verdict:
             ),
         )
 
-    # Weight by trustworthiness AND by how much there was to see. A detector that
-    # is sure it found something tiny should not outvote one that is sure it found
-    # something enormous. The 0.5 floor keeps effect_size from silencing detectors
-    # that do not report one.
-    weights = np.array(
-        [e.confidence * (0.5 + 0.5 * min(max(e.effect_size, 0.0), 1.0)) for e in usable],
-        dtype=float,
-    )
+    # Weight by trustworthiness AND, for positive findings, by how much there was
+    # to see: a detector sure it found something tiny should not outvote one sure it
+    # found something enormous.
+    #
+    # The discount applies ONLY to detectors reporting a manipulation. There is no
+    # anomaly to size when a detector reports clean, and penalising it for that made
+    # a confident "nothing here" too weak to clear an image -- pristine photographs
+    # were being routed to human review because their evidence was all negative.
+    def _weight(e: Evidence) -> float:
+        if e.score <= 0.5:
+            return e.confidence
+        return e.confidence * (0.5 + 0.5 * min(max(e.effect_size, 0.0), 1.0))
+
+    weights = np.array([_weight(e) for e in usable], dtype=float)
     logits = np.array([_logit(e.score) for e in usable], dtype=float)
     pooled = float((weights * logits).sum() / weights.sum())
     prob = float(1.0 / (1.0 + np.exp(-pooled)))

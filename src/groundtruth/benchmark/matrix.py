@@ -69,7 +69,12 @@ def run(
         for size in cell_sizes:
             for how in launderings:
                 for i, base in enumerate(bases):
-                    fx = make(base, out_dir, op, size, how, seed=i * 17 + 3)
+                    # A splice needs foreign content, so the donor is another
+                    # photograph from the set -- never the base itself.
+                    donor = bases[(i + 1) % len(bases)] if len(bases) > 1 else None
+                    fx = make(
+                        base, out_dir, op, size, how, seed=i * 17 + 3, donor_path=donor
+                    )
                     verdict = analyse(
                         ImageCase(image_path=fx.path), detectors=detectors
                     )

@@ -5,7 +5,41 @@ physics rather than a trained real/fake classifier.
 
 ---
 
-## ⚠️ Status: does not work on real photographs yet
+## Status: measured, partly working
+
+Every claim below comes from `scripts/benchmark.py`, which generates manipulations
+**on top of real photographs** across operation × size × laundering, with pixel-exact
+masks and explicit controls. 88 cells:
+
+```
+operation            0.5%      2.0%      8.0%     25.0%
+--------------------------------------------------------
+pristine        100% quiet   (control — must not flag)
+global_tone     100% quiet   (control — legitimate exposure lift)
+clone_out         75%/0.34  100%/0.49  100%/0.49  100%/0.50
+duplicate         75%/0.34  100%/0.49  100%/0.49  100%/0.50
+splice_in          0%/0.02    0%/0.12    0%/0.45    0%/0.60
+render_overlay     0%/0.37    0%/0.36    0%/0.18    0%/0.22
+inpaint_out        0%/0.02    0%/0.07    0%/0.04    0%/0.06
+
+manipulations detected : 30/80  (38%)
+controls left alone    :   8/8  (100%)
+```
+
+**Works:** copy-move — content cloned out or duplicated within a photograph.
+100% at 2% of frame and above, and it fires on nothing else (0/4 pristine,
+0/4 global_tone, 0/16 render_overlay). That specificity is the point.
+
+**Does not work:** foreign content spliced in, rendered overlays such as a replaced
+licence plate, and removal by smooth fill.
+
+**Two detectors are quarantined as `experimental` and excluded from the pipeline**
+because the benchmark showed they never worked — see below. A detector earns its
+place by being measured, not by being written.
+
+---
+
+## The earlier failure, and what it taught
 
 Measured on the [Korus Realistic Tampering Dataset](https://pkorus.pl/downloads/dataset-realistic-tampering)
 — 112 tampered images and their 112 matched pristine originals, real cameras,
@@ -34,6 +68,23 @@ assumptions hold.
 
 **Every synthetic number in this repository is an implementation check, not a
 performance claim.** Full analysis in [`docs/DESIGN.md`](docs/DESIGN.md#evaluation-results).
+
+### Two detectors that never worked
+
+The benchmark exists because eyeballing single images kept producing false confidence.
+It immediately caught two:
+
+**`compression.block_grid`** required 2 windows to agree on a foreign grid phase.
+Across N confident windows and 64 possible phases, chance supplies about N/64 —
+roughly **10 on a full-frame photo**. The threshold sat below the noise floor, so it
+fired on 3 of 4 *pristine* images and on every manipulation class equally. Raised to
+beat chance, it finds nothing even on the splice it was built for.
+
+**`geometric.sharpness_inconsistency`** fires at 7.2σ on a real photo with a
+hand-replaced licence plate — but localises to the crumpled bumper and the tree line.
+**0% of flagged pixels inside the actual edit.**
+
+Both are still in the tree, documented, and excluded from the default pipeline.
 
 ---
 
@@ -93,20 +144,19 @@ finding in its own right.
 
 ## Detectors
 
-| Detector | Tier | Localises |
-|---|---|---|
-| `context.policy_consistency` | context | — |
-| `metadata.container_identity` | metadata | — |
-| `metadata.preview_mismatch` | metadata | ✅ |
-| `compression.block_grid` | compression | ✅ |
-| `compression.ela` | compression | ✅ |
-| `sensor.noise_inconsistency` | sensor | ✅ |
+| Detector | Tier | Localises | State |
+|---|---|---|---|
+| `geometric.copy_move` | geometric | ✅ | **works** — 100% on duplication ≥2% of frame |
+| `metadata.preview_mismatch` | metadata | ✅ | **works** — when a stale preview survives |
+| `context.policy_consistency` | context | — | works — dispositive, no ML involved |
+| `metadata.container_identity` | metadata | — | weak structural signal |
+| `sensor.noise_inconsistency` | sensor | ✅ | fitted noise level function; rarely fires |
+| `compression.ela` | compression | ✅ | baseline only, confidence capped at 0.30 |
+| `compression.block_grid` | compression | ✅ | **experimental** — never worked, see above |
+| `geometric.sharpness_inconsistency` | geometric | ✅ | **experimental** — mislocalises, see above |
 
-Each detector's blind spots and measured operating envelope are in
-[`docs/DETECTORS.md`](docs/DETECTORS.md). Block-grid analysis, for example, fails
-entirely below ~q92 because the re-save's own grid overwrites the foreign one —
-asserted as a test, because a detector whose failure modes are undocumented is one
-you cannot deploy.
+Each detector's blind spots and measured envelope are in
+[`docs/DETECTORS.md`](docs/DETECTORS.md).
 
 ## Layout
 
@@ -123,9 +173,25 @@ scripts/            dataset salvage and evaluation
 tests/fixtures.py   synthetic manipulations with ground-truth masks
 ```
 
+## Benchmark
+
+```bash
+python scripts/benchmark.py              # operation x size
+python scripts/benchmark.py laundering   # operation x laundering
+```
+
+Cells report **detected% / mean localisation**. Both numbers are needed: a detector
+that flags everything scores perfectly on the first alone, and localisation is what
+caught the sharpness detector firing 7σ away from the actual edit.
+
 ## Next
 
-1. Model noise as a function of local brightness instead of a global constant.
-2. Matched-pair regression harness, so scene variation cancels.
-3. A JPEG corpus — the Korus TIFFs meant the entire compression tier correctly
-   abstained (0 of 224) and remains unvalidated on real data.
+1. **Rendered overlays** (`render_overlay`, 0%) — the replaced-licence-plate case.
+   Likely needs sharpness paired with *absence of sensor noise*; neither cue alone
+   separates a rendered plate from crumpled metal.
+2. **Splicing** (`splice_in`, 0%) — the current benchmark splices between photos
+   from the same camera model, which share a noise level function. Cross-camera
+   donors would be the honest harder test.
+3. **Removal by fill** (`inpaint_out`, 0%) — needs the "too smooth" side, which is
+   the mirror of the sharpness cue and currently unbuilt.
+4. A JPEG corpus for the compression tier, which remains unvalidated on real data.
