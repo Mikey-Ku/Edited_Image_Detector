@@ -126,6 +126,19 @@ class Evidence:
     confidence: float = 0.0
     """How much this detector trusts itself *on this input*. Fusion weights by this."""
 
+    effect_size: float = 0.0
+    """How large the deviation is, relative to this detector's resolution floor.
+
+    Distinct from both score and confidence. A detector can be highly confident
+    about a barely-measurable anomaly (small effect, high confidence) or unsure
+    about an enormous one. 0 means nothing measurable; 1 means unmissable.
+
+    Without this, an obvious quarter-of-the-frame splice and a marginal one-percent
+    edit produce the same hedged verdict, because score saturates and confidence
+    only describes the detector's own reliability. Fusion weights by it so that
+    large, clear deviations decide and marginal ones route to a human.
+    """
+
     explanation: str = ""
     """Human-readable, adjuster-facing. Not a number."""
 

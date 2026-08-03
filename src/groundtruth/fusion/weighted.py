@@ -58,14 +58,21 @@ def fuse(evidence: list[Evidence]) -> Verdict:
             ),
         )
 
-    weights = np.array([e.confidence for e in usable], dtype=float)
+    # Weight by trustworthiness AND by how much there was to see. A detector that
+    # is sure it found something tiny should not outvote one that is sure it found
+    # something enormous. The 0.5 floor keeps effect_size from silencing detectors
+    # that do not report one.
+    weights = np.array(
+        [e.confidence * (0.5 + 0.5 * min(max(e.effect_size, 0.0), 1.0)) for e in usable],
+        dtype=float,
+    )
     logits = np.array([_logit(e.score) for e in usable], dtype=float)
     pooled = float((weights * logits).sum() / weights.sum())
     prob = float(1.0 / (1.0 + np.exp(-pooled)))
 
-    # Aggregate confidence: dominated by the most confident detector, with
-    # diminishing credit for corroboration. A single very sure detector should be
-    # able to carry a decision; ten unsure ones should not.
+    # Aggregate confidence: dominated by the strongest single reading, with
+    # diminishing credit for corroboration. One decisive detector should be able to
+    # carry a verdict; ten marginal ones should not.
     top = float(weights.max())
     corroboration = float(1.0 - np.prod(1.0 - weights))
     aggregate_confidence = max(top, corroboration)

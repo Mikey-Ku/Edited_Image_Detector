@@ -1,15 +1,21 @@
-"""Block-grid misalignment, and the envelope where it stops working.
+"""Block-grid misalignment -- currently an experimental detector that does not work.
 
-Half of these tests assert detection; the other half pin the *limits*. A detector
-whose failure modes are undocumented is one you cannot deploy, because you have no
-idea when to believe it.
+These tests used to assert detection. They passed because the foreign-phase
+cluster threshold was 2, which sits below the noise floor: across N confident
+windows and 64 possible grid phases, chance supplies about N/64 windows on any
+given wrong phase. The benchmark exposed this -- the detector fired on 3 of 4
+pristine photographs and on every manipulation class equally.
+
+With the threshold raised to beat chance, it detects nothing. These tests now
+record that, so the failure is documented rather than rediscovered. They are the
+specification the estimator has to meet before the detector leaves experimental.
 """
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
-from fixtures import grid_clean, grid_splice, hit_rate
+from fixtures import grid_clean, grid_splice
 from PIL import Image
 
 from groundtruth import ImageCase
@@ -27,49 +33,43 @@ def _run(path):
 # --------------------------------------------------------------------------
 
 
-def test_grid_splice_is_detected(tmp_path):
+def test_detector_is_held_out_of_the_default_pipeline():
+    from groundtruth.core.detector import all_detectors
+
+    assert BLOCK_GRID not in {d.id for d in all_detectors()}
+    assert BLOCK_GRID in {d.id for d in all_detectors(include_experimental=True)}
+
+
+def test_grid_splice_is_currently_MISSED(tmp_path):
+    """Known failure. Flip this to an assertion of detection when it is fixed."""
     ev = _run(grid_splice(tmp_path / "splice.jpg")[0])
 
     assert ev.applicable
-    assert ev.score > 0.7
-    assert ev.details["windows_misaligned"] > 0
+    assert ev.details["windows_misaligned"] == 0
 
 
 def test_clean_image_shows_a_single_coherent_grid(tmp_path):
+    """Still true, and the one thing it does reliably."""
     ev = _run(grid_clean(tmp_path / "clean.jpg")[0])
 
     assert ev.applicable
     assert ev.score < 0.4
     assert ev.details["windows_misaligned"] == 0
-    # Nearly every readable window should agree on one phase for a camera original.
     assert ev.details["host_agreement"] > 0.9
 
 
-def test_detected_region_is_localised(tmp_path):
-    path, mask = grid_splice(tmp_path / "splice.jpg")
-    ev = _run(path)
+def test_cluster_threshold_scales_with_chance(tmp_path):
+    """The requirement must grow with the frame, because chance does."""
+    from groundtruth.detectors.compression.block_grid import _min_cluster
 
-    assert ev.heatmap is not None
-    assert hit_rate(ev.heatmap, mask, 0.5) > 0.5
-
-
-def test_foreign_phase_differs_from_host(tmp_path):
-    """The reported region phase must be a phase some window actually had.
-
-    An earlier version took the mode of the x and y phases independently, which
-    could report a combination no window held -- and on clean images produced a
-    'foreign' phase identical to the host's.
-    """
-    ev = _run(grid_splice(tmp_path / "splice.jpg")[0])
-
-    assert ev.details["region_phase"] != ev.details["host_phase"]
-    assert ev.details["phase_difference"] != [0, 0]
+    assert _min_cluster(50) < _min_cluster(650)
+    assert _min_cluster(650) >= 20  # ~10 expected by chance, so demand well above it
 
 
 def test_phase_values_are_in_range(tmp_path):
     ev = _run(grid_splice(tmp_path / "splice.jpg")[0])
 
-    for key in ("host_phase", "region_phase", "phase_difference"):
+    for key in ("host_phase",):
         assert all(0 <= v < 8 for v in ev.details[key]), key
 
 
@@ -92,11 +92,12 @@ def test_fails_when_the_composite_is_saved_at_low_quality(tmp_path):
 
 
 @pytest.mark.parametrize("final_quality", [92, 96, 99])
-def test_detects_across_the_working_envelope(tmp_path, final_quality):
+def test_currently_misses_across_the_whole_quality_range(tmp_path, final_quality):
+    """Was the 'working envelope'. It was the threshold, not the envelope."""
     ev = _run(
         grid_splice(tmp_path / f"q{final_quality}.jpg", final_quality=final_quality)[0]
     )
-    assert ev.details["windows_misaligned"] > 0
+    assert ev.details["windows_misaligned"] == 0
 
 
 def test_aligned_paste_is_invisible(tmp_path):

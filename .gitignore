@@ -1,3 +1,8 @@
+# secrets -- listed first so it is never accidentally reordered below a negation
+.env
+.env.*
+!.env.example
+
 __pycache__/
 *.py[cod]
 .venv/
@@ -18,3 +23,6 @@ data/processed/*
 *.pt
 *.pth
 *.onnx
+
+# local tooling
+.claude/

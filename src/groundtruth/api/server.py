@@ -1,9 +1,8 @@
-"""Local web UI for inspecting a single image.
+"""Web UI for checking whether a photograph has been edited.
 
-Deliberately a *review* tool, not a verdict tool. The layout puts the per-detector
-evidence and its caveats next to the score, because a number without the reasoning
-behind it is exactly what an adjuster cannot act on -- and exactly what makes an
-automated fraud call dangerous.
+The page explains what it measures before it asks for a file, and every result
+shows the reasoning beside the score. A bare probability is what nobody can act
+on, and it is what makes an automated call dangerous.
 """
 
 from __future__ import annotations
@@ -17,6 +16,7 @@ from pathlib import Path
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
 from ..core.types import ClaimContext, ImageCase
@@ -25,7 +25,7 @@ from ..pipeline.runner import analyse
 from ..recovery.reconstruct import reconstruct
 from .render import colourise, overlay
 
-app = FastAPI(title="Ground Truth", docs_url="/api/docs")
+app = FastAPI(title="Retrace", docs_url="/api/docs")
 
 _STATIC = Path(__file__).parent / "static"
 
@@ -33,12 +33,35 @@ _STATIC = Path(__file__).parent / "static"
 # having to go find a manipulated image first.
 _SAMPLES = Path(__file__).resolve().parents[3] / "samples"
 
-_SAMPLE_BLURB = {
-    "edited_stale_preview.jpg": "Editor rewrote the image but left the EXIF thumbnail — the original is recoverable",
-    "splice_noise_mismatch.jpg": "Region spliced in carrying a different sensor-noise level",
-    "clean_uniform_noise.jpg": "Unmanipulated control for the noise splice",
-    "splice_block_grid.jpg": "Region pasted from another JPEG, carrying a misaligned 8×8 grid",
-    "clean_single_grid.jpg": "Unmanipulated control for the block-grid splice",
+# Served so the worked example on the landing page shows real files rather than
+# a mockup of what the tool would produce.
+# (blurb, group). Real photographs are grouped separately and labelled honestly:
+# Retrace currently cannot separate them from their own unedited originals, and
+# hiding that behind a flattering demo would misrepresent the tool.
+_SAMPLE_INFO = {
+    "edited_stale_preview.jpg": (
+        ("Synthetic. The editor rewrote the image but left the embedded preview, "
+         "so the original is recoverable."), "synthetic"),
+    "splice_noise_mismatch.jpg": (
+        "Synthetic. A region spliced in carrying a different sensor-noise level.", "synthetic"),
+    "clean_uniform_noise.jpg": (
+        "Synthetic. Unedited control for the noise splice.", "synthetic"),
+    "splice_block_grid.jpg": (
+        "Synthetic. A region pasted from another JPEG, carrying a misaligned 8x8 grid.",
+        "synthetic"),
+    "clean_single_grid.jpg": (
+        "Synthetic. Unedited control for the block-grid splice.", "synthetic"),
+    "real_courtyard_edited.jpg": (
+        ("Real photograph (Nikon D7000), two figures composited in by hand in GIMP. "
+         "Retrace does not currently detect this."), "real"),
+    "real_courtyard_original.jpg": (
+        "The unedited original of the courtyard photograph.", "real"),
+    "real_courtyard_stale_preview.jpg": (
+        ("Real photograph, hand-edited, and the file still holds a preview of the "
+         "original. Retrace recovers it."), "real"),
+    "real_rooftops_stale_preview.jpg": (
+        ("Real photograph, hand-edited, preview of the original intact. "
+         "Retrace recovers it."), "real"),
 }
 
 # Panels are for looking at, not for measuring. Downscaling keeps the payload
@@ -74,9 +97,18 @@ def _parse_date(value: str | None) -> date | None:
         return None
 
 
+if _SAMPLES.is_dir():
+    app.mount("/samples", StaticFiles(directory=str(_SAMPLES)), name="samples")
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     return (_STATIC / "index.html").read_text()
+
+
+@app.get("/science", response_class=HTMLResponse)
+def science() -> str:
+    return (_STATIC / "science.html").read_text()
 
 
 @app.get("/api/samples")
@@ -85,7 +117,11 @@ def samples() -> JSONResponse:
         return JSONResponse([])
     return JSONResponse(
         [
-            {"name": p.name, "blurb": _SAMPLE_BLURB.get(p.name, "")}
+            {
+                "name": p.name,
+                "blurb": _SAMPLE_INFO.get(p.name, ("", "synthetic"))[0],
+                "group": _SAMPLE_INFO.get(p.name, ("", "synthetic"))[1],
+            }
             for p in sorted(_SAMPLES.glob("*.jpg"))
         ]
     )

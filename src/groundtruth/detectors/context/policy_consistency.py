@@ -152,12 +152,15 @@ class PolicyConsistencyDetector(Detector):
                 findings.append(f"photograph GPS is {km:.0f} km from the reported loss")
                 confidence = max(confidence, 0.6)
 
+        # Either the timestamp contradicts the claim or it does not. There is no
+        # partial credit, so effect size tracks the score rather than an area.
         return Evidence(
             detector_id=self.id,
             tier=self.tier,
             applicable=True,
             score=score,
             confidence=confidence,
+            effect_size=float(min(1.0, max(0.0, (score - 0.5) * 2.0))),
             explanation="; ".join(findings),
             details=details,
         )

@@ -32,6 +32,16 @@ class Detector(ABC):
     cost: int = 1
     """Rough compute cost, 1-5. Used to order cheap detectors first for early exit."""
 
+    experimental: bool = False
+    """Excluded from the default pipeline.
+
+    A detector earns its place by being measured, not by being written. Until one
+    is shown to help on cases with known ground truth it stays out of the default
+    set -- a detector that fires in the wrong place makes the system worse than not
+    having it, because it spends the operator's attention and dilutes fusion.
+    Request it explicitly by id to evaluate it.
+    """
+
     def applies_to(self, case: ImageCase) -> tuple[bool, str]:
         """Return (applicable, reason-if-not). Default: always applicable."""
         return True, ""
@@ -63,9 +73,12 @@ def register(cls: type[Detector]) -> type[Detector]:
     return cls
 
 
-def all_detectors() -> list[Detector]:
+def all_detectors(include_experimental: bool = False) -> list[Detector]:
     """Instantiate every registered detector, cheapest first."""
-    return sorted((c() for c in _REGISTRY.values()), key=lambda d: d.cost)
+    made = [c() for c in _REGISTRY.values()]
+    if not include_experimental:
+        made = [d for d in made if not d.experimental]
+    return sorted(made, key=lambda d: d.cost)
 
 
 def get(detector_id: str) -> Detector:

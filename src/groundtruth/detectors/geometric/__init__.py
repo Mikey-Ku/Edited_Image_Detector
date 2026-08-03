@@ -1,1 +1,1 @@
-"""Not yet implemented -- see docs/DETECTORS.md for the build order."""
+from .sharpness import SharpnessInconsistencyDetector  # noqa: F401

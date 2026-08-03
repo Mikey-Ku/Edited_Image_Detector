@@ -108,6 +108,7 @@ class PreviewMismatchDetector(Detector):
             applicable=True,
             score=float(min(0.96, 0.75 + 2.0 * changed)),
             confidence=confidence,
+            effect_size=float(min(1.0, changed / 0.10)),
             explanation="; ".join(parts),
             heatmap=recon.difference,
             details=details,

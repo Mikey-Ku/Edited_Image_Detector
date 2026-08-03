@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retrace — the science</title>
+<style>
+  :root {
+    --bg:#fff; --soft:#f7f8fa; --line:#e4e7ec; --line-2:#d3d8e0;
+    --ink:#14161b; --ink-2:#59606d; --ink-3:#8b93a1;
+    --blue:#2f5fd0; --blue-soft:#eef2fd;
+    --pass:#0f7a5f; --alert:#bb2f4a; --alert-soft:#fdeef1; --review:#a86a08; --review-soft:#fdf3e4;
+    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 var(--ui);-webkit-font-smoothing:antialiased}
+  :focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:4px}
+  .shell{max-width:760px;margin:0 auto;padding:0 28px}
+  a{color:var(--blue)}
+
+  header{border-bottom:1px solid var(--line)}
+  .head{display:flex;align-items:center;gap:14px;height:62px;max-width:1060px;margin:0 auto;padding:0 28px}
+  .logo{font-size:17px;font-weight:640;letter-spacing:-.3px;text-decoration:none;color:var(--ink)}
+  .logo em{font-style:normal;color:var(--blue)}
+  .head nav{margin-left:auto;font-size:14px}
+
+  h1{font-size:36px;line-height:1.15;letter-spacing:-1px;font-weight:660;margin:56px 0 14px}
+  .lede{font-size:18px;color:var(--ink-2);margin:0 0 8px}
+  h2{font-size:24px;letter-spacing:-.5px;font-weight:640;margin:56px 0 6px;padding-top:32px;border-top:1px solid var(--line)}
+  h2:first-of-type{border-top:0;padding-top:0}
+  h3{font-size:17px;font-weight:620;margin:32px 0 8px}
+  h4{font-size:14px;font-weight:620;margin:22px 0 6px;color:var(--ink-2)}
+  p{margin:0 0 14px;color:var(--ink-2)}
+  p strong,li strong{color:var(--ink);font-weight:590}
+  ul{margin:0 0 14px;padding-left:20px;color:var(--ink-2)}
+  li{margin-bottom:6px}
+
+  .math{background:var(--soft);border:1px solid var(--line);border-radius:10px;
+        padding:16px 18px;margin:16px 0;font:14.5px/1.7 var(--mono);color:var(--ink);overflow-x:auto}
+  .math .c{color:var(--ink-3)}
+  .where{font-size:13.5px;color:var(--ink-3);margin:-6px 0 18px;padding-left:2px}
+
+  .box{border-left:3px solid var(--line-2);padding:2px 0 2px 16px;margin:18px 0}
+  .box.warn{border-left-color:var(--review);background:var(--review-soft);
+            padding:14px 16px;border-radius:0 8px 8px 0}
+  .box.bad{border-left-color:var(--alert);background:var(--alert-soft);
+           padding:14px 16px;border-radius:0 8px 8px 0}
+  .box p:last-child{margin-bottom:0}
+  .box h4{margin-top:0}
+
+  table{width:100%;border-collapse:collapse;font-size:14px;margin:18px 0}
+  th{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-2);
+     font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-3);font-weight:550}
+  td{padding:9px 10px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:top}
+  td code{font:13px var(--mono);color:var(--ink)}
+
+  .tocs{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin:28px 0 0}
+  .tocs p{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--ink-3)}
+  .tocs ol{margin:0;padding-left:20px;font-size:14.5px}
+  .tocs li{margin-bottom:4px}
+
+  footer{border-top:1px solid var(--line);margin-top:64px;padding:26px 0 60px}
+  footer p{font-size:13px;color:var(--ink-3)}
+</style>
+</head>
+<body>
+
+<header><div class="head">
+  <a class="logo" href="/">Re<em>trace</em></a>
+  <nav><a href="/">← Back to the checker</a></nav>
+</div></header>
+
+<main class="shell">
+
+<h1>The science behind Retrace</h1>
+<p class="lede">Every measurement, what it assumes, and where it breaks.</p>
+
+<div class="tocs">
+  <p>On this page</p>
+  <ol>
+    <li><a href="#premise">Why not just train a classifier</a></li>
+    <li><a href="#preview">Embedded preview — recovering the original</a></li>
+    <li><a href="#noise">Sensor noise inconsistency</a></li>
+    <li><a href="#grid">JPEG block grid misalignment</a></li>
+    <li><a href="#ela">Error Level Analysis, and why it's weak</a></li>
+    <li><a href="#context">Claim context</a></li>
+    <li><a href="#fusion">Combining the measurements</a></li>
+    <li><a href="#reality">What happens on real photographs</a></li>
+  </ol>
+</div>
+
+<h2 id="premise">1. Why not just train a classifier</h2>
+<p>The obvious approach is to train a neural network on a pile of real and edited images.
+  It works well on images that look like its training set and <strong>collapses toward chance
+  on generators and editing tools it has never seen</strong>. New tools ship constantly, so a
+  detector built that way is always chasing.</p>
+<p>Retrace instead measures properties of <strong>how cameras and codecs physically work</strong>.
+  Those don't change when a new editor is released. The trade is that each measurement is
+  narrow, has a knowable failure mode, and can be checked by hand — which is what this page
+  is for.</p>
+
+<h2 id="preview">2. Embedded preview</h2>
+<p>The only measurement here that isn't statistical.</p>
+<p>JPEG, HEIC, TIFF and most RAW formats store a small second copy of the image inside the
+  file. Many editors rewrite the main image and never regenerate that copy. When that
+  happens, <strong>the preview is a photograph of the original</strong> — real pixels, not an
+  inference.</p>
+
+<h4>How the comparison is made</h4>
+<p>The main image is downscaled to the preview's size rather than the preview being upscaled.
+  Enlarging a 160×120 thumbnail to 4000px invents detail that was never recorded, and the
+  interpolation error would swamp the real difference. Both images are compared where both
+  actually carry information.</p>
+<p>The preview was encoded separately, so it differs in brightness and colour even when the
+  content is identical. A per-channel gain and offset is fitted by least squares before
+  differencing:</p>
+<div class="math">g = cov(x, y) / var(x)      <span class="c">// x = preview, y = downscaled main</span>
+b = mean(y) − g · mean(x)
+x' = clip(g · x + b, 0, 255)</div>
+<p class="where">Gain and offset are <em>global</em>, so a genuinely altered region cannot be
+  absorbed by the fit — only whole-frame tone shifts can.</p>
+
+<div class="math">δ(i,j) = mean over channels of |y(i,j) − x'(i,j)| / 255
+τ      = max(0.05, median(δ) + 6 · 1.4826 · MAD(δ))
+change = clip((δ − τ) / 0.08, 0, 1)</div>
+<p class="where">τ has an <strong>absolute floor</strong>. A purely relative threshold reports the
+  same fraction of any frame as changed whether or not anything was edited, because every
+  distribution has a top few percent. 0.05 ≈ 13 intensity levels — far beyond re-encoding
+  cost, far below a real edit.</p>
+
+<div class="box">
+  <h4>Blind spot</h4>
+  <p>Total. Any tool that regenerates the preview correctly defeats this completely, and
+    messaging apps strip metadata wholesale. High precision, low recall.</p>
+</div>
+
+<h2 id="noise">3. Sensor noise inconsistency</h2>
+<p>An image sensor adds noise whose magnitude is set by the physics of capture. A region
+  spliced in from another photograph carries <em>its source's</em> noise level; a region that
+  was denoised or synthesised carries almost none.</p>
+
+<h4>Estimating the noise level</h4>
+<p>Donoho's robust estimator: the standard deviation of the finest-scale wavelet detail
+  coefficients, measured by median absolute deviation.</p>
+<div class="math">HH(i,j) = ½·[ I(2i,2j) − I(2i,2j+1) − I(2i+1,2j) + I(2i+1,2j+1) ]
+
+σ̂ = MAD(HH) / 0.6745        <span class="c">// MAD = median(|HH − median(HH)|)</span></div>
+<p class="where">MAD, not standard deviation. A plain σ over a block containing an edge
+  reports the edge, not the noise — every texture boundary becomes a false positive. Edges
+  are outliers, and MAD ignores outliers.</p>
+
+<h4>Finding regions that disagree</h4>
+<p>Noise scales <em>multiplicatively</em> with sensor gain, so a splice from a higher-ISO
+  source is a constant offset in logs rather than in absolutes. The comparison is therefore
+  done in log space, with a robust centre and scale:</p>
+<div class="math">c = median( log σ̂ )
+s = 1.4826 · MAD( log σ̂ )
+z(b) = |log σ̂(b) − c| / s
+
+flagged  = z > 3.5
+reported = flagged blocks in connected components of size ≥ 2</div>
+<p class="where">The contiguity requirement is a physical constraint, not a tuning knob:
+  across ~160 blocks a handful will exceed any fixed z from estimation noise alone, but a
+  real splice is a connected region. This controls false positives without costing real
+  detections, which raising the threshold would.</p>
+
+<div class="box warn">
+  <h4>The assumption that breaks — see §8</h4>
+  <p>This treats the frame as having <strong>one global noise level</strong>. That is false for
+    real photographs, and it is the single reason Retrace does not currently work on them.</p>
+</div>
+
+<h2 id="grid">4. JPEG block grid misalignment</h2>
+<p>JPEG divides the image into 8×8 blocks anchored to the origin and quantises each
+  independently. That leaves faint discontinuities at every block boundary — a grid, baked
+  into the pixel values.</p>
+<p>Paste a region from another JPEG and it brings its own grid, shifted by wherever it
+  landed. <strong>Only 1 offset in 64 lands back in phase.</strong> This is a geometric
+  argument rather than a statistical one: not "this region looks unusual" but "this region's
+  compression grid is offset from its surroundings, and no camera produces that."</p>
+
+<h4>Measuring the grid</h4>
+<p>The naive measure — the size of the step across a candidate boundary — is useless on
+  textured content, because texture produces large steps everywhere and lifts all eight
+  phases together. What identifies a block boundary is that the step <em>there</em> exceeds
+  the steps immediately beside it:</p>
+<div class="math">d(j)  = |I(j+1) − I(j)|
+e(j)  = d(j) − ½·[ d(j−1) + d(j+1) ]      <span class="c">// excess step</span>
+
+E(p)  = mean{ e(j) : j ≡ p (mod 8) },  p = 0…7
+phase = argmax E,   snr = (max E − mean E_others) / max(std E_others, 0.05)</div>
+<p class="where">Texture inflates a boundary and its neighbours equally, so it cancels in
+  <code>e</code>. The scale floor of 0.05 matters: dividing by the observed spread alone
+  diverges whenever the other phases happen to agree, which reads as overwhelming confidence
+  in a featureless region.</p>
+<p>Phase is estimated per 64px window (stride 32). A window is used only if
+  <code>snr ≥ 3</code>. The frame's own phase is the mode across confident windows, and a
+  region is reported only when several windows <strong>agree with each other</strong> on the
+  same foreign phase — not merely differ from the host.</p>
+
+<h4>Measured operating envelope</h4>
+<table>
+  <tr><th>Condition</th><th>Result</th></tr>
+  <tr><td>Composite saved at q ≥ 92</td><td>Detected</td></tr>
+  <tr><td>Composite saved at q = 88</td><td><strong>Complete miss</strong> — 0 of ~100 readable windows</td></tr>
+  <tr><td>Smooth or low-texture image</td><td>No readable grid; abstains</td></tr>
+  <tr><td>Paste offset ≡ (0,0) mod 8</td><td>Invisible by construction</td></tr>
+</table>
+<p>Below ~q92 the re-save quantises hard enough that its own origin-anchored grid overwrites
+  the foreign one. The evidence is physically gone from the pixels; no estimator recovers it.</p>
+
+<h2 id="ela">5. Error Level Analysis</h2>
+<p>Re-save the image at a fixed quality and measure how much each region changes. Regions
+  with a different compression history should change by a different amount.</p>
+<p><strong>ELA is included as a baseline to beat, not as a signal.</strong> It is the most
+  famous and most over-trusted technique in this field:</p>
+<ul>
+  <li>It confounds texture with tampering — busy regions of an authentic photo light up
+    exactly like a splice.</li>
+  <li>It is meaningless on images that were never JPEG, or saved near the probe quality.</li>
+  <li>It produces confident-looking output on random input, which is what makes it dangerous.</li>
+</ul>
+<p>Retrace suppresses the part of the error that local texture explains, and then caps ELA's
+  confidence at 0.30 by construction so it can never drive a verdict.</p>
+
+<h2 id="context">6. Claim context</h2>
+<p>The cheapest and most decisive check, using no machine learning at all. If a photograph's
+  EXIF capture time <strong>precedes the policy start date</strong>, the damage predates the
+  coverage — and pixel-perfect authenticity is irrelevant.</p>
+<p>It is worth stating plainly that a single integer comparison outranks every measurement
+  above it on this page. The most sophisticated system is not always the smartest one.</p>
+
+<h2 id="fusion">7. Combining the measurements</h2>
+<p>Each detector returns three separate things, and conflating them is the usual way a
+  multi-detector system quietly produces nonsense:</p>
+<table>
+  <tr><th>Field</th><th>Meaning</th></tr>
+  <tr><td><code>applicable</code></td><td>Whether this detector can speak to this input at all</td></tr>
+  <tr><td><code>score</code></td><td>P(edited) from this detector alone. <strong>0.5 means no information</strong></td></tr>
+  <tr><td><code>confidence</code></td><td>How much the detector trusts itself <em>on this input</em></td></tr>
+</table>
+<p>Detectors reporting <code>applicable = false</code> are <strong>excluded</strong>, not folded
+  in as neutral. "I cannot measure this" and "I measured and found nothing" are different
+  claims, and averaging them together corrupts the result.</p>
+<div class="math">pooled = Σ(confidence · logit(score)) / Σ(confidence)
+P(edited) = sigmoid(pooled)</div>
+
+<div class="box bad">
+  <h4>Known problems with this, stated plainly</h4>
+  <p><strong>1.</strong> It assumes the detectors are independent. They are not — several
+    compression measurements read the same underlying artefacts and will agree for reasons
+    unrelated to editing.<br>
+    <strong>2.</strong> The output is <em>not calibrated</em>. A reported 0.9 does not mean
+    "right 90% of the time", so the decision thresholds are ordering, not probability.<br>
+    <strong>3.</strong> The weights are hand-set rather than learned.</p>
+  <p>This is a baseline that exists so the pipeline runs end to end. It should be replaced by
+    a learned fusion with explicit calibration, verified on a reliability diagram.</p>
+</div>
+
+<h2 id="reality">8. What happens on real photographs</h2>
+<p>Everything above was verified against manipulations generated in-house, with pixel-exact
+  ground truth. Those tests pass. Then it was measured against the
+  <a href="https://pkorus.pl/downloads/dataset-realistic-tampering">Korus Realistic Tampering
+  Dataset</a> — 112 real photographs edited by hand in GIMP and Affinity Photo, with their
+  112 matched unedited originals.</p>
+
+<table>
+  <tr><th></th><th>Synthetic</th><th>Real photographs</th></tr>
+  <tr><td>Localisation hit rate</td><td>0.99</td><td><strong>0.010</strong></td></tr>
+  <tr><td>Unedited images cleared</td><td>100%</td><td><strong>0%</strong></td></tr>
+  <tr><td>Edited images flagged</td><td>100%</td><td>18.8%</td></tr>
+  <tr><td>Unedited <em>falsely</em> flagged</td><td>0%</td><td><strong>19.6%</strong></td></tr>
+</table>
+
+<p>The false positive rate exceeds the true positive rate, and the two score distributions
+  are identical to three decimal places. <strong>That is chance performance.</strong></p>
+
+<h4>The diagnosis</h4>
+<p>Running the noise measurement on matched pairs of the same scene:</p>
+<div class="math">image          edited    unedited
+r09696ba3t     189 blk   186
+r1e3303ebt     192       220     <span class="c">← unedited scores higher</span>
+r2410fbc3t     256       260     <span class="c">← unedited scores higher</span>
+r36610622t       0       317     <span class="c">← unedited flagged, edited clean</span></div>
+<p>Mean separation is <strong>−0.065</strong>. The edited image scores higher than its own
+  original on 4 of 14 pairs — worse than a coin flip.</p>
+<p>The cause is §3's assumption. <strong>Photon shot noise scales with the square root of
+  signal</strong>, so bright regions of a completely untouched photograph are genuinely
+  noisier than dark ones. Hundreds of blocks legitimately deviate from any single global
+  level — and they deviate <em>identically</em> in both versions, because the two files are
+  the same photograph apart from a region covering ~5% of the frame.</p>
+
+<div class="box bad">
+  <h4>The real lesson is about the test, not the detector</h4>
+  <p>The synthetic fixture generated a scene with <em>uniform</em> noise and pasted in a
+    region with a different uniform level — precisely the world the detector models. It
+    scored 0.99 because <strong>the test could not have failed.</strong> It was measuring
+    whether the code matched its own premise, not whether the premise was true.</p>
+  <p>Synthetic fixtures verify that a detector fires in the right place <em>given its
+    assumptions</em>. Only real data tests whether those assumptions hold.</p>
+</div>
+
+<h4>What has to change</h4>
+<ul>
+  <li>Model noise as a <strong>function of local brightness</strong> — a noise level function —
+    and flag deviation from that model rather than from a constant.</li>
+  <li>Add a matched-pair regression harness, so scene-level variation cancels.</li>
+  <li>Validate the compression measurements on a JPEG corpus. The Korus images are TIFF, so
+    the entire compression tier correctly abstained on all 224 and remains unverified on
+    real data.</li>
+</ul>
+
+</main>
+
+<footer><div class="shell"><p>Retrace reports what it can measure and says plainly when it
+  cannot. A result is evidence for a human decision, not the decision itself.</p></div></footer>
+
+</body>
+</html>

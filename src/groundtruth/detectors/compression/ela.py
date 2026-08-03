@@ -106,6 +106,7 @@ class ELADetector(Detector):
             applicable=True,
             score=score,
             confidence=confidence,
+            effect_size=float(min(1.0, hot_fraction / 0.10)),
             explanation=explanation,
             heatmap=residual,
             details={

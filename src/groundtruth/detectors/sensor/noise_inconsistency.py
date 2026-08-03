@@ -167,6 +167,14 @@ class NoiseInconsistencyDetector(Detector):
         homogeneity = float(np.clip(1.0 - scale / 0.60, 0.2, 1.0))
         confidence = float(np.clip(0.80 * support * homogeneity, 0.10, 0.80))
 
+        # Effect size: area of the anomaly relative to ~10% of measurable blocks,
+        # tempered by how far past threshold the strongest block went. A single
+        # marginal block is a small effect however confident the estimate.
+        effect = float(
+            min(1.0, anomalous_fraction / 0.10)
+            * min(1.0, float(z.max()) / (2.0 * _Z_ANOMALOUS))
+        ) if anomalous.any() else 0.0
+
         if anomalous.any():
             score = float(min(0.92, 0.55 + 3.0 * anomalous_fraction))
             explanation = (
@@ -187,6 +195,7 @@ class NoiseInconsistencyDetector(Detector):
             applicable=True,
             score=score,
             confidence=confidence,
+            effect_size=effect,
             explanation=explanation,
             # No clustered anomaly means there is nothing to point at. Returning a
             # blank map instead of None would let fusion present "we looked and

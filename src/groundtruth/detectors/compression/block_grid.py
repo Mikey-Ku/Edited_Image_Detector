@@ -59,9 +59,25 @@ _MIN_PHASE_SNR = 3.0
 # Without an absolute floor the ratio diverges on flat content.
 _SCALE_FLOOR = 0.05
 
-# As in the noise detector: a real splice is contiguous, and isolated windows
-# across a large image are estimation noise.
-_MIN_CLUSTER_WINDOWS = 2
+# A cluster must beat CHANCE, and chance scales with the image.
+#
+# There are 64 possible grid phases. Across N confident windows, roughly N/64 will
+# land on any particular wrong phase by estimation noise alone -- on a 1920x1080
+# frame that is ~10 windows agreeing on a foreign phase in a completely untouched
+# photograph. A fixed threshold of 2 was therefore guaranteed to fire on almost
+# everything, and the benchmark confirmed it: 3 of 4 pristine images flagged.
+#
+# The requirement is now scaled against that null: a foreign phase has to be
+# carried by several times more windows than coincidence would supply.
+_PHASES = BLOCK * BLOCK
+_CHANCE_MULTIPLE = 2.5
+_MIN_CLUSTER_FLOOR = 4
+
+
+def _min_cluster(n_confident: int) -> int:
+    """Smallest believable foreign-phase cluster for this many windows."""
+    expected = n_confident / _PHASES
+    return max(_MIN_CLUSTER_FLOOR, int(np.ceil(_CHANCE_MULTIPLE * expected)))
 
 _MIN_CONFIDENT_WINDOWS = 6
 
@@ -139,6 +155,24 @@ class BlockGridDetector(Detector):
     localises = True
     cost = 3
 
+    # EXPERIMENTAL -- the benchmark showed this was never working.
+    #
+    # It previously required only 2 windows to agree on a foreign phase. Across N
+    # confident windows and 64 possible phases, chance alone supplies about N/64 --
+    # roughly 10 on a full-frame photograph. The threshold sat below the noise
+    # floor, so it fired on 3 of 4 PRISTINE images in the benchmark and on 16/16 of
+    # every manipulation class equally. That is not detection, it is a constant.
+    #
+    # With the threshold raised to beat chance it now finds zero coherent foreign
+    # phases even on the synthetic splice it was designed for, at both fixture and
+    # full-frame size. So the phase estimator is not recovering the pasted region's
+    # grid in enough windows to be distinguishable from noise.
+    #
+    # The physics is real and well documented; this implementation does not deliver
+    # it. Held out of the default pipeline until the estimator is strong enough to
+    # clear the chance threshold on a known splice.
+    experimental = True
+
     def applies_to(self, case: ImageCase) -> tuple[bool, str]:
         if not case.container.actual.block_compressed:
             return False, (
@@ -196,10 +230,11 @@ class BlockGridDetector(Detector):
         codes_all = phase_y.astype(int) * BLOCK + phase_x.astype(int)
         disagrees = confident & (codes_all != host_code)
 
+        min_cluster = _min_cluster(int(confident.sum()))
         clustered = np.zeros_like(disagrees)
         for code in np.unique(codes_all[disagrees]) if disagrees.any() else []:
             same = disagrees & (codes_all == code)
-            clustered |= _keep_clusters(same, _MIN_CLUSTER_WINDOWS)
+            clustered |= _keep_clusters(same, min_cluster)
 
         isolated = int(disagrees.sum() - clustered.sum())
         agreement = float((confident & ~disagrees).sum() / max(int(confident.sum()), 1))
@@ -210,6 +245,7 @@ class BlockGridDetector(Detector):
             "windows_misaligned": int(clustered.sum()),
             "isolated_discarded": isolated,
             "host_agreement": round(agreement, 3),
+            "min_cluster_required": min_cluster,
         }
 
         if not clustered.any():
@@ -262,12 +298,14 @@ class BlockGridDetector(Detector):
         heat = np.divide(hot, cover, out=np.zeros_like(hot), where=cover > 0)
 
         misaligned_fraction = float(clustered.sum() / max(int(confident.sum()), 1))
+        effect = float(min(1.0, misaligned_fraction / 0.15))
         return Evidence(
             detector_id=self.id,
             tier=self.tier,
             applicable=True,
             score=float(min(0.95, 0.65 + 1.5 * misaligned_fraction)),
             confidence=float(np.clip(0.85 * agreement, 0.25, 0.85)),
+            effect_size=effect,
             explanation=(
                 f"{int(clustered.sum())} of {int(confident.sum())} readable windows "
                 f"carry a block grid at phase ({off_x},{off_y}) while the frame is at "
