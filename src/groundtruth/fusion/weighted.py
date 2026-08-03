@@ -31,6 +31,9 @@ MIN_CONFIDENCE_TO_DECIDE = 0.35
 
 _EPS = 1e-6
 
+# How much less a "found nothing" counts than a "found something".
+_NEGATIVE_DISCOUNT = 0.45
+
 
 def _logit(p: float) -> float:
     p = min(max(p, _EPS), 1.0 - _EPS)
@@ -66,9 +69,18 @@ def fuse(evidence: list[Evidence]) -> Verdict:
     # anomaly to size when a detector reports clean, and penalising it for that made
     # a confident "nothing here" too weak to clear an image -- pristine photographs
     # were being routed to human review because their evidence was all negative.
+    # Negative findings are discounted, because absence of evidence in one
+    # modality is weak evidence of absence overall. A copy-move detector reporting
+    # "no duplication" says nothing about whether an embedded preview contradicts
+    # the image -- they answer different questions. Weighted equally, a handful of
+    # detectors correctly finding nothing in their own domain averaged away a
+    # near-certain positive and dropped a genuine detection to "needs review".
+    #
+    # This is the standard forensic asymmetry: finding a trace is informative,
+    # failing to find one mostly is not.
     def _weight(e: Evidence) -> float:
         if e.score <= 0.5:
-            return e.confidence
+            return e.confidence * _NEGATIVE_DISCOUNT
         return e.confidence * (0.5 + 0.5 * min(max(e.effect_size, 0.0), 1.0))
 
     weights = np.array([_weight(e) for e in usable], dtype=float)
@@ -76,11 +88,13 @@ def fuse(evidence: list[Evidence]) -> Verdict:
     pooled = float((weights * logits).sum() / weights.sum())
     prob = float(1.0 / (1.0 + np.exp(-pooled)))
 
-    # Aggregate confidence: dominated by the strongest single reading, with
-    # diminishing credit for corroboration. One decisive detector should be able to
-    # carry a verdict; ten marginal ones should not.
-    top = float(weights.max())
-    corroboration = float(1.0 - np.prod(1.0 - weights))
+    # Aggregate confidence is computed from RAW confidence, not the weights above.
+    # The negative discount governs how much each reading moves the score; it must
+    # not also make us less sure we can decide at all, or a set of detectors that
+    # confidently agree an image is clean becomes too quiet to clear it.
+    raw = np.array([e.confidence for e in usable], dtype=float)
+    top = float(raw.max())
+    corroboration = float(1.0 - np.prod(1.0 - raw))
     aggregate_confidence = max(top, corroboration)
 
     if aggregate_confidence < MIN_CONFIDENCE_TO_DECIDE:

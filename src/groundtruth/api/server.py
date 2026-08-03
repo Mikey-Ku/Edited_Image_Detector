@@ -46,11 +46,6 @@ _SAMPLE_INFO = {
         "Synthetic. A region spliced in carrying a different sensor-noise level.", "synthetic"),
     "clean_uniform_noise.jpg": (
         "Synthetic. Unedited control for the noise splice.", "synthetic"),
-    "splice_block_grid.jpg": (
-        "Synthetic. A region pasted from another JPEG, carrying a misaligned 8x8 grid.",
-        "synthetic"),
-    "clean_single_grid.jpg": (
-        "Synthetic. Unedited control for the block-grid splice.", "synthetic"),
     "real_courtyard_edited.jpg": (
         ("Real photograph (Nikon D7000), two figures composited in by hand in GIMP. "
          "Retrace does not currently detect this."), "real"),

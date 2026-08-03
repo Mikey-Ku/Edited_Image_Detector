@@ -108,7 +108,12 @@ class PreviewMismatchDetector(Detector):
             applicable=True,
             score=float(min(0.96, 0.75 + 2.0 * changed)),
             confidence=confidence,
-            effect_size=float(min(1.0, changed / 0.10)),
+            # Scaled against 5% of frame, not 10%. This is a DIRECT comparison
+            # against a known original rather than a statistical inference, so a
+            # localised change of a few percent is already an unambiguous effect --
+            # the same fraction means much more here than it does to a detector
+            # inferring manipulation from noise statistics.
+            effect_size=float(min(1.0, changed / 0.05)),
             explanation="; ".join(parts),
             heatmap=recon.difference,
             details=details,
