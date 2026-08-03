@@ -92,7 +92,7 @@ def _high_pass(patch: np.ndarray) -> float:
 
 
 class CameraPatches(Dataset):
-    """Yields (patch, device_index). Patches are sampled fresh each epoch."""
+    """Yields (patch, device_index), with fresh crop locations each epoch."""
 
     def __init__(
         self,
@@ -137,7 +137,12 @@ class CameraPatches(Dataset):
 
     def __getitem__(self, i: int) -> tuple[torch.Tensor, int]:
         path, label = self.files[i // self.patches_per_image]
-        rng = random.Random((i, path.stat().st_size))
+        # Seeded from torch's per-worker seed, which the DataLoader re-rolls every
+        # epoch. So each epoch draws FRESH patch locations from the same 1050
+        # images -- with a set this small, reusing fixed crops would throw away
+        # most of the available signal -- while a fixed run seed still reproduces
+        # the whole schedule.
+        rng = random.Random(torch.initial_seed() + i)
         with Image.open(path) as im:
             img = np.asarray(im.convert("RGB"), dtype=np.float32) / 255.0
         patch = self._sample_patch(img, rng)

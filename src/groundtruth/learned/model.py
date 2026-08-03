@@ -57,6 +57,26 @@ class FingerprintNet(nn.Module):
                 layers.append(nn.ReLU(inplace=True))
             in_ch = out_ch
         self.body = nn.Sequential(*layers)
+
+        # Projection head, on the pooled statistics rather than the residual.
+        #
+        # Needed because the pooled features are per-channel means and standard
+        # deviations, and standard deviations are non-negative -- so every raw
+        # embedding lands in the positive orthant and any two point nearly the same
+        # way. Cosine similarity was ~1.000 for every pair before training started,
+        # which left the contrastive loss no gradient to work with.
+        #
+        # BatchNorm1d centres each statistic across the batch, removing the shared
+        # component; the MLP then has the freedom to place cameras apart. This is
+        # the standard contrastive-learning projection head, and it is discarded at
+        # inference -- localisation uses the per-pixel residual from `forward`.
+        stat_dim = embed_dim * 2
+        self.head = nn.Sequential(
+            nn.BatchNorm1d(stat_dim),
+            nn.Linear(stat_dim, 128),
+            nn.ReLU(inplace=True),
+            nn.Linear(128, 64),
+        )
         self._init_high_pass()
 
     def _init_high_pass(self) -> None:
@@ -80,9 +100,27 @@ class FingerprintNet(nn.Module):
         return r / (r.norm(dim=1, keepdim=True) + 1e-6)
 
     def pooled(self, x: torch.Tensor) -> torch.Tensor:
-        """One embedding per patch, for the contrastive training objective."""
-        r = self.forward(x).mean(dim=(2, 3))
-        return r / (r.norm(dim=1, keepdim=True) + 1e-6)
+        """One embedding per patch, for the contrastive training objective.
+
+        Pools the RAW residual, and by second-order statistics rather than a mean.
+
+        Both details were bugs first. Averaging the per-pixel *normalised* residual
+        collapses the representation: 4096 unit vectors average to their common
+        component, so every patch produced a near-identical embedding (same-camera
+        similarity .974, different-camera .969, and a loss sitting exactly at
+        ln(batch) -- the value for having learned nothing).
+
+        A mean is also the wrong summary in principle. A noise residual is
+        zero-mean by construction, so its spatial average carries almost no
+        information about the sensor. What distinguishes a camera is the residual's
+        *distribution* -- its per-channel energy -- which is what the standard
+        deviation captures. The mean is kept alongside it since a genuine DC offset
+        per channel is still evidence.
+        """
+        r = self.body(x)
+        stats = torch.cat([r.mean(dim=(2, 3)), r.std(dim=(2, 3))], dim=1)
+        e = self.head(stats)
+        return e / (e.norm(dim=1, keepdim=True) + 1e-6)
 
 
 def supervised_contrastive_loss(

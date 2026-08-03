@@ -97,6 +97,16 @@ def main() -> int:
         train_ds, batch_size=args.batch, shuffle=True, num_workers=4, drop_last=True
     )
     val_dl = DataLoader(val_ds, batch_size=args.batch, num_workers=4)
+    # A second loader over TRAINING devices, evaluated the same way as the held-out
+    # set. Without it, a gap of zero is ambiguous: the model might be failing to
+    # learn anything at all, or learning the training devices perfectly and failing
+    # to generalise. Those need opposite fixes -- more capacity versus more devices
+    # -- so the two numbers have to be read side by side.
+    seen_dl = DataLoader(
+        CameraPatches(DATA, split.train_devices, args.patches_per_image, seed=7),
+        batch_size=args.batch,
+        num_workers=4,
+    )
 
     dev = pick_device()
     model = FingerprintNet(width=args.width, depth=args.depth).to(dev)
@@ -122,11 +132,15 @@ def main() -> int:
         sched.step()
 
         m = evaluate(model, val_dl, dev)
-        history.append({"epoch": epoch, "loss": total / max(seen, 1), **m})
+        t = evaluate(model, seen_dl, dev)
+        history.append(
+            {"epoch": epoch, "loss": total / max(seen, 1), "train_gap": t["gap"], **m}
+        )
         print(
             f"epoch {epoch:>2}  loss {total/max(seen,1):.4f}   "
-            f"held-out same {m['same']:+.3f}  diff {m['diff']:+.3f}  "
-            f"GAP {m['gap']:+.3f}   ({time.time()-started:.0f}s)",
+            f"train GAP {t['gap']:+.3f}   held-out GAP {m['gap']:+.3f}"
+            f"  (same {m['same']:+.3f} diff {m['diff']:+.3f})"
+            f"   ({time.time()-started:.0f}s)",
             flush=True,
         )
 
@@ -147,12 +161,27 @@ def main() -> int:
     (OUT.parent / "fingerprint_history.json").write_text(json.dumps(history, indent=2))
     print(f"\nbest held-out gap {best:+.3f} -> {OUT}")
     if best < 0.05:
+        train_gap = history[-1]["train_gap"] if history else 0.0
         print(
-            "\nWARNING: the gap is near zero. The model is not separating cameras it "
-            "has not seen, so it will not localise manipulations either. Do not wire "
-            "it into the pipeline on the strength of a falling loss curve.",
+            "\nWARNING: held-out gap is near zero -- the model does not separate "
+            "cameras it has not seen, so it will not localise manipulations either.",
             file=sys.stderr,
         )
+        if train_gap > 0.2:
+            print(
+                f"Training-device gap is {train_gap:+.3f}, so it IS learning -- it is "
+                f"memorising the {len(split.train_devices)} training devices and not "
+                f"generalising. That is a device-count problem, not a capacity one: "
+                f"Noiseprint++ used 1,475 camera models.",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"Training-device gap is only {train_gap:+.3f}, so it is not learning "
+                f"the task at all. Look at the objective and the pooling before "
+                f"adding data.",
+                file=sys.stderr,
+            )
     return 0
 
 
