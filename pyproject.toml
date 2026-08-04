@@ -39,6 +39,10 @@ packages = ["src/groundtruth"]
 [tool.ruff]
 line-length = 95
 target-version = "py311"
+# Third-party reference source, kept verbatim so the port in
+# src/groundtruth/learned/noiseprint.py can be checked against its original.
+# Reformatting it would destroy exactly the property that makes it worth keeping.
+extend-exclude = ["vendor"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "tests"]

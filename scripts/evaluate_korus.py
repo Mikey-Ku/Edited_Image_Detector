@@ -106,13 +106,37 @@ def main() -> int:
                 "probability": verdict.manipulated_probability,
                 "decision": verdict.decision.value,
                 "localised_by": verdict.localised_by,
+                # Every detector's raw reading, so any ablation -- drop a detector,
+                # reweight the fusion, refit a threshold -- is answerable offline.
+                # A 28-minute run per hypothesis is how measurement stops happening.
+                "evidence": {
+                    ev.detector_id: {
+                        "applicable": ev.applicable,
+                        "score": ev.score,
+                        "confidence": ev.confidence,
+                        "effect_size": ev.effect_size,
+                    }
+                    for ev in verdict.evidence
+                },
             }
-            if label == "tampered" and gt is not None and verdict.heatmap is not None:
+            if label == "tampered" and gt is not None:
                 mask = _mask(gt)
-                if mask.shape == verdict.heatmap.shape:
+                rec["mask_fraction"] = float(mask.mean())
+                if verdict.heatmap is not None and mask.shape == verdict.heatmap.shape:
                     rec["hit_rate"] = _hit_rate(verdict.heatmap, mask)
                     rec["iou"] = _iou(verdict.heatmap, mask)
-                    rec["mask_fraction"] = float(mask.mean())
+                # Per-detector localisation against the true mask. The fused hit
+                # rate hides which detector earned it -- and on the first run the
+                # detector supplying most of it turned out to fire on clean images
+                # at the same rate as on forgeries.
+                rec["detector_loc"] = {
+                    ev.detector_id: {
+                        "hit_rate": _hit_rate(ev.heatmap, mask),
+                        "iou": _iou(ev.heatmap, mask),
+                    }
+                    for ev in verdict.evidence
+                    if ev.heatmap is not None and ev.heatmap.shape == mask.shape
+                }
             records.append(rec)
 
         if i % 10 == 0 or i == len(pairs):

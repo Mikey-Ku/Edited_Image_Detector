@@ -27,31 +27,55 @@ def _noise_evidence(path):
 # --------------------------------------------------------------------------
 
 
-def test_splice_is_flagged(tmp_path):
-    """Synthetic fixture, so the camera-fingerprint detector is excluded.
+def test_noise_splice_fixture_is_caught_only_by_the_quarantined_detector(tmp_path):
+    """The default pipeline does NOT catch this fixture, and that is correct.
 
-    Noiseprint is trained on photographs. These fixtures are generated gradients
-    with added noise -- no camera ever made them -- so its reading is meaningless
-    here and it correctly reports "consistent", which drags a genuine detection
-    down to review. The real measure for that detector is the benchmark, which
-    runs on actual photographs.
+    This test used to assert a FLAG, and it passed for a bad reason on both sides.
+    `noise_splice` builds a scene with *uniform* noise and swaps in a patch at a
+    different level -- which is precisely the assumption `sensor.noise_inconsistency`
+    makes. The fixture could not have falsified the detector, and the detector could
+    not have failed the fixture.
+
+    Measured on 112 real forgeries and their matched originals, that detector scores
+    AUC 0.494 and fires on 66% of *pristine* photographs -- so it is now quarantined,
+    and this synthetic splice goes undetected by the default set.
+
+    What is asserted here is the true state of affairs: invoked directly the
+    detector still fires exactly as designed, and the shipped pipeline still says
+    nothing about this image. Both facts are worth failing on if they change.
     """
     path, _ = noise_splice(tmp_path / "splice.jpg")
-    detectors = [
-        d for d in all_detectors() if d.id != "sensor.noiseprint_anomaly"
-    ]
-    verdict = analyse(ImageCase(image_path=path), detectors=detectors)
 
-    assert verdict.decision is Decision.FLAG
-    assert verdict.manipulated_probability > 0.7
+    ev = _noise_evidence(path)
+    assert ev.applicable and ev.score > 0.7, "the quarantined detector still fires"
+    assert NOISE not in {d.id for d in all_detectors()}, "must stay out of the default set"
+
+    verdict = analyse(ImageCase(image_path=path))
+    assert verdict.decision is not Decision.FLAG
 
 
-def test_pristine_is_cleared(tmp_path):
+def test_synthetic_pristine_is_not_falsely_flagged(tmp_path):
+    """A generated image is something the system cannot assess, and now says so.
+
+    This asserted AUTO_CLEAR until `sensor.noise_inconsistency` was quarantined, and
+    it passed for the wrong reason: that detector confidently reported "clean" on a
+    fixture built from the same uniform-noise assumption it makes. Its confidence was
+    worth nothing -- AUC 0.494 on 224 real photographs.
+
+    With it gone, every remaining detector correctly abstains on this input: no SIFT
+    keypoints in a smooth gradient, no demosaicing structure because no sensor made
+    it, no embedded preview, no claim context. Only ELA can speak, at confidence
+    0.05. Routing to a human is the honest response to having no evidence, and
+    auto-clearing would be false confidence.
+
+    What must never happen is a false FLAG, and that is what is asserted.
+    """
     path, _ = pristine(tmp_path / "clean.jpg")
     verdict = analyse(ImageCase(image_path=path))
 
-    assert verdict.decision is Decision.AUTO_CLEAR
-    assert verdict.manipulated_probability < 0.4
+    assert verdict.decision is not Decision.FLAG
+    assert verdict.manipulated_probability < 0.55
+    assert not verdict.firing, "no detector should raise a concern on a clean image"
 
 
 def test_pristine_produces_no_clustered_anomaly(tmp_path):
@@ -68,15 +92,36 @@ def test_pristine_produces_no_clustered_anomaly(tmp_path):
 
 
 def test_heatmap_lands_inside_the_manipulated_region(tmp_path):
-    path, mask = noise_splice(tmp_path / "splice.jpg")
-    verdict = analyse(ImageCase(image_path=path))
+    """Localisation quality, measured on the detector rather than the pipeline.
 
-    assert verdict.heatmap is not None
-    assert verdict.heatmap.shape == mask.shape
+    Ran against the fused verdict until `sensor.noise_inconsistency` was
+    quarantined; it was the only detector localising this fixture, so the fused map
+    is now empty. The machinery being checked -- that a heatmap points at the edit
+    rather than merely correlating with it -- is worth keeping under test, so it is
+    asserted where the signal actually is.
+    """
+    path, mask = noise_splice(tmp_path / "splice.jpg")
+    ev = _noise_evidence(path)
+
+    assert ev.heatmap is not None
+    assert ev.heatmap.shape == mask.shape
     # Nearly all flagged pixels must fall inside the true splice. A detector that
     # scores correctly but points at the wrong place is useless to an adjuster.
-    assert hit_rate(verdict.heatmap, mask) > 0.85
-    assert localisation_iou(verdict.heatmap, mask) > 0.4
+    assert hit_rate(ev.heatmap, mask) > 0.85
+    assert localisation_iou(ev.heatmap, mask) > 0.4
+
+
+def test_default_pipeline_does_not_localise_the_noise_splice(tmp_path):
+    """The cost of the quarantine, stated rather than hidden.
+
+    An empty map is the honest output here: no detector in the shipped set can see
+    this manipulation. Recording it means a future detector that closes the gap will
+    break this test, which is the point.
+    """
+    path, _ = noise_splice(tmp_path / "splice.jpg")
+    verdict = analyse(ImageCase(image_path=path))
+
+    assert NOISE not in verdict.localised_by
 
 
 def test_heatmap_is_absent_when_nothing_localises(tmp_path):
@@ -93,9 +138,9 @@ def test_reported_region_overlaps_the_truth(tmp_path):
     from groundtruth.fusion.localisation import peak_regions
 
     path, mask = noise_splice(tmp_path / "splice.jpg")
-    verdict = analyse(ImageCase(image_path=path))
+    ev = _noise_evidence(path)
 
-    regions = peak_regions(verdict.heatmap, threshold=0.5)
+    regions = peak_regions(ev.heatmap, threshold=0.5)
     assert regions, "expected at least one region of interest"
 
     x0, y0, x1, y1 = regions[0]["bbox"]

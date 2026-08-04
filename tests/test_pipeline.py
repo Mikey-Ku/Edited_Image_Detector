@@ -42,8 +42,27 @@ def test_detectors_are_registered():
         "metadata.container_identity",
         "metadata.preview_mismatch",
         "compression.ela",
-        "sensor.noise_inconsistency",
+        "geometric.copy_move",
+        "sensor.noiseprint_anomaly",
     } <= ids
+
+
+def test_quarantined_detectors_stay_out_of_the_default_set():
+    """Each of these failed measurement. The set is asserted, not just its size.
+
+    Naming them means re-admitting one is a deliberate edit to this test with a
+    number to justify it, rather than something that happens by accident when a
+    registration import moves.
+    """
+    default = {d.id for d in all_detectors()}
+    every = {d.id for d in all_detectors(include_experimental=True)}
+
+    assert every - default == {
+        "compression.block_grid",             # fires on chance-level phase agreement
+        "geometric.sharpness_inconsistency",  # 7.2 sigma, 0% of pixels inside the edit
+        "sensor.synthetic_region",            # no operating point separates the classes
+        "sensor.noise_inconsistency",         # AUC 0.494 on 224 real photographs
+    }
 
 
 def test_detectors_run_cheapest_first():

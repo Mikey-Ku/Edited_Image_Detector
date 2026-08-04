@@ -34,6 +34,32 @@ So the baseline is a fitted **noise level function** rather than a number:
 fitted robustly across the frame, with `a` carrying shot noise and `b` the
 signal-independent read noise. A block is anomalous when it departs from the level
 predicted *for its own brightness*.
+
+**The noise level function did not save it. This detector is quarantined.**
+
+Re-measured on the full Korus set -- 112 hand-made forgeries and their 112 matched
+pristine originals -- after the fit was in place:
+
+    standalone AUC                    0.494   (below chance)
+    localises on tampered images        68%
+    localises on pristine images        66%
+    mean score, tampered              0.5485
+    mean score, pristine              0.5494   (higher)
+    fused AUC with it                 0.665
+    fused AUC without it              0.686
+
+Firing at the same rate on untouched photographs as on forgeries, with the pristine
+mean fractionally *higher*, is what no signal looks like when it is measured
+properly. Removing it improves the pipeline. It stays in the tree, documented,
+excluded from the default set.
+
+The reason is worth keeping: the noise level function is a better model of a real
+photograph than a global constant, and it still fails, because at this block size
+the *residual* variation around the fit -- texture, focus falloff, local content --
+is larger than the difference a careful human retoucher leaves behind. A better
+model of the wrong quantity does not become the right quantity. The learned
+residual in `sensor.noiseprint_anomaly` is what actually separates the classes,
+and it separates them by measuring something else entirely.
 """
 
 from __future__ import annotations
@@ -145,6 +171,7 @@ class NoiseInconsistencyDetector(Detector):
     tier = Tier.SENSOR
     localises = True
     cost = 3
+    experimental = True
 
     def applies_to(self, case: ImageCase) -> tuple[bool, str]:
         h, w = case.pixels().shape[:2]

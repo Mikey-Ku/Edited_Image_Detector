@@ -1,4 +1,4 @@
-"""Regions whose camera fingerprint disagrees with the rest of the frame.
+"""Regions whose camera fingerprint differs in MAGNITUDE from the rest of the frame.
 
 This is the detector every hand-crafted attempt in this project was reaching for.
 The physics was always right -- a manipulated region carries a different camera
@@ -11,28 +11,36 @@ trained to suppress scene content and enhance camera-model artefacts, the same
 per-block anomaly search that failed on a hand-derived residual has a real signal
 to work with.
 
-The search itself is deliberately simple, and the same shape as every other
-detector here: per-block statistics, a robust deviation from the frame's own
-median, and a contiguity requirement so isolated blocks are discarded. The
-difference is entirely in the quality of the residual it runs on -- which is the
-finding worth recording.
+**This detector reduces each block to residual energy, which is blind to spatial
+arrangement.** Shuffling a block's pixels leaves the reading unchanged, and a camera
+fingerprint lives largely in the arrangement -- so on its own this readout separates
+Korus forgeries from their matched originals at only AUC 0.517 on held-out images,
+a confidence interval spanning chance. `sensor.noiseprint_structure` measures the
+arrangement instead and separates them at 0.677.
 
-Two details matter:
+**It is kept anyway, because it wins where it matters most.** Compared at matched
+false positive rate, on the same 110 forgeries:
+
+    matched FPR    energy-only hits   structure-only hits   exact binomial
+    1.8%                  7                    0               p = 0.016
+    5.0%                  2                    3               p = 1.000
+    10.0%                 5                   11               p = 0.210
+
+At the high-precision corner -- the operating point an insurance triage system
+actually runs at, where a false accusation is expensive -- this readout catches
+seven forgeries the structural one misses and none the other way round. That is a
+nested win at p = 0.016, not noise. Its bimodal design is why: silent almost always,
+confident when it speaks. AUC integrates over the whole curve and does not see this,
+which is a good reason not to select detectors on AUC alone.
+
+Two further details matter:
 
 **The quality factor must match.** A separate network is trained per JPEG
 quantisation level, and using the wrong one degrades the fingerprint badly. It is
 recovered from the file's own quantisation table, never assumed.
 
-**Content still leaks through.** Suppression is not perfect, so a heavily textured
-region retains some scene energy. Blocks are compared in log space against a
-robust centre, which handles the multiplicative part of that leak.
-
-**Saturated blocks are excluded.** Where the sensor clipped, there is no noise to
-fingerprint -- the pixels are pinned at the rail and carry no information about the
-camera. Including them made a legitimate exposure lift look like tampering, because
-brightening a photo blows out its highlights and every blown region then reads as a
-foreign fingerprint. Absence of a fingerprint where physics says none can exist is
-not evidence of anything.
+**Saturated blocks are excluded**, and frames with no demosaicing structure are
+abstained on entirely -- see `_fingerprint.py` for both rules.
 
 Nonprofit use only -- see ``groundtruth.learned.noiseprint`` for the licence.
 """
@@ -44,13 +52,18 @@ from scipy.ndimage import label
 
 from ...core.detector import Detector, register
 from ...core.types import Evidence, ImageCase, Tier
+from ._fingerprint import (
+    MAX_CLIPPED_FRACTION,
+    MIN_BLOCKS,
+    MIN_DEMOSAIC_STRUCTURE,
+    clipped_share,
+    energy,
+    period2,
+    residual_for,
+    robust_z,
+)
 
 BLOCK = 32
-
-# A block is unusable when this share of it sits at either rail. Clipped pixels
-# carry no sensor noise by definition.
-_CLIP_LOW, _CLIP_HIGH = 0.02, 0.98
-_MAX_CLIPPED_FRACTION = 0.20
 
 # Robust deviation beyond which a block's fingerprint is called foreign.
 _Z_ANOMALOUS = 3.5
@@ -58,27 +71,11 @@ _Z_ANOMALOUS = 3.5
 # A manipulation is contiguous; isolated blocks across a large frame are noise.
 _MIN_CLUSTER_BLOCKS = 3
 
-_MIN_BLOCKS = 32
-
 # Floors below which a finding is reported as clean rather than as a weak
-# positive. A detector whose "nothing here" still scores highly poisons fusion.
+# positive. A detector whose "nothing here" still scores highly poisons fusion --
+# and this bimodal shape is exactly what buys the high-precision corner above.
 _MIN_ANOMALOUS_BLOCKS = 4
 _MIN_ANOMALOUS_FRACTION = 0.012
-
-
-def _block_stats(residual: np.ndarray, gray: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Per-block fingerprint energy, and the share of clipped pixels."""
-    h, w = residual.shape
-    nr, nc = h // BLOCK, w // BLOCK
-    energy = np.zeros((nr, nc), dtype=np.float32)
-    clipped = np.zeros((nr, nc), dtype=np.float32)
-    for i in range(nr):
-        for j in range(nc):
-            sl = (slice(i * BLOCK, (i + 1) * BLOCK), slice(j * BLOCK, (j + 1) * BLOCK))
-            energy[i, j] = float(residual[sl].std())
-            g = gray[sl]
-            clipped[i, j] = float(((g <= _CLIP_LOW) | (g >= _CLIP_HIGH)).mean())
-    return energy, clipped
 
 
 def _keep_clusters(mask: np.ndarray, min_size: int) -> np.ndarray:
@@ -92,7 +89,7 @@ def _keep_clusters(mask: np.ndarray, min_size: int) -> np.ndarray:
 
 @register
 class NoiseprintAnomalyDetector(Detector):
-    """Locate regions whose learned camera fingerprint differs from the frame."""
+    """Locate regions whose learned camera fingerprint differs in strength."""
 
     id = "sensor.noiseprint_anomaly"
     tier = Tier.SENSOR
@@ -116,31 +113,36 @@ class NoiseprintAnomalyDetector(Detector):
         return True, ""
 
     def _run(self, case: ImageCase) -> Evidence:
-        from ...learned.noiseprint import extract, quality_factor
+        from ...learned.noiseprint import quality_factor
 
         gray = case.pixels().astype(np.float32).mean(axis=2) / 255.0
         qf = quality_factor(case.image_path)
-        residual = extract(gray, qf)
+        residual = residual_for(case.image_path, qf)
 
-        energy, clipped = _block_stats(residual, gray)
-        usable = (energy > 1e-6) & (clipped <= _MAX_CLIPPED_FRACTION)
-        if int(usable.sum()) < _MIN_BLOCKS:
+        block_energy = energy(residual, BLOCK)
+        clipped = clipped_share(gray, BLOCK)
+        usable = (block_energy > 1e-6) & (clipped <= MAX_CLIPPED_FRACTION)
+        if int(usable.sum()) < MIN_BLOCKS:
             return Evidence.not_applicable(
                 self.id, self.tier, "too few blocks carry a readable fingerprint"
             )
 
+        if float(np.median(period2(residual, BLOCK)[usable])) < MIN_DEMOSAIC_STRUCTURE:
+            return Evidence.not_applicable(
+                self.id,
+                self.tier,
+                "no demosaicing structure in this image, so it carries no camera "
+                "fingerprint to compare regions against",
+            )
+
         # Log space: fingerprint energy varies multiplicatively with local content
         # that the network did not fully suppress.
-        logs = np.log(np.maximum(energy, 1e-6))
-        centre = float(np.median(logs[usable]))
-        scale = float(np.median(np.abs(logs[usable] - centre))) * 1.4826 + 1e-6
-
-        z = np.zeros_like(energy)
-        z[usable] = np.abs(logs[usable] - centre) / scale
+        logs = np.log(np.maximum(block_energy, 1e-6))
+        z, _, scale = robust_z(logs, usable)
 
         flagged = usable & (z > _Z_ANOMALOUS)
         anomalous = _keep_clusters(flagged, _MIN_CLUSTER_BLOCKS)
-        fraction = float(anomalous.sum() / max(int(usable.sum()), 1))
+        fraction = float(anomalous.sum() / int(usable.sum()))
 
         if (
             int(anomalous.sum()) < _MIN_ANOMALOUS_BLOCKS
@@ -152,8 +154,9 @@ class NoiseprintAnomalyDetector(Detector):
         details: dict[str, object] = {
             "quality_factor": qf,
             "block_px": BLOCK,
+            "readout": "energy",
             "readable_blocks": int(usable.sum()),
-            "excluded_saturated": int((clipped > _MAX_CLIPPED_FRACTION).sum()),
+            "excluded_saturated": int((clipped > MAX_CLIPPED_FRACTION).sum()),
             "foreign_blocks": int(anomalous.sum()),
             "isolated_discarded": int(flagged.sum() - anomalous.sum()),
             "max_deviation_sigma": round(float(z.max()), 2),
@@ -176,7 +179,7 @@ class NoiseprintAnomalyDetector(Detector):
                 confidence=confidence,
                 effect_size=0.0,
                 explanation=(
-                    f"the camera fingerprint is consistent across "
+                    f"fingerprint strength is consistent across "
                     f"{int(usable.sum())} blocks"
                 ),
                 details=details,
