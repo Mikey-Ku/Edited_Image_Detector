@@ -19,16 +19,42 @@ it is **applicable zero times**, so none of the measured accuracy comes from it.
 
 `docs/DEMO.md` walks through both, with the images to reproduce them.
 
-**It does not detect AI-generated images, and that is measured rather than assumed.** A
-model asked to edit a photograph regenerates the whole frame, so nothing is locally
-inconsistent with anything else and the strongest detector abstains: a resynthesised
-image comes back `AUTO_CLEAR` at 0.255, against 0.240 for an untouched photograph. The
-obvious fix, reporting "this file carries no camera fingerprint at all", was built and
-measured and **does not work**: an honest photo re-saved at JPEG q75 already fails that
-test 93% of the time, so it cannot separate *generated* from *forwarded through
-WhatsApp*. The numbers are in [`docs/DETECTORS.md`](docs/DETECTORS.md), the sweep in
-[`scripts/sweep_provenance.py`](scripts/sweep_provenance.py). What this is good at is
-hand-editing inside a real photograph, which is still most claim fraud.
+### Two questions, not one
+
+Every pixel tier above asks whether a **real photograph was altered after capture**.
+That question presumes a capture. An image generated end to end was never captured:
+there is no region disagreeing with its surroundings, because the whole frame was
+synthesised at once. Measured on a real ChatGPT export, the pixel tiers returned
+`AUTO_CLEAR` at **0.288**, *lower than a genuine untouched photograph*.
+
+The answer was in the file rather than the pixels. That export carries a 29 KB `caBX`
+chunk: a **C2PA manifest, signed by OpenAI**, asserting
+`digitalSourceType: trainedAlgorithmicMedia`. So there is a second question, and it
+needs metadata rather than physics:
+
+| question | tier | on that ChatGPT file |
+|---|---|---|
+| Was this photograph altered after capture? | sensor · geometric · compression | cleared it, 0.288 |
+| Did it come from a camera **at all**? | **provenance** | **flagged it, 0.876** |
+
+`provenance.content_credentials` verifies the signature against its certificate
+chain, so this is not trusting a metadata string, it is checking a cryptographic
+claim. It reports three things: signed as generated, signed as camera capture (the
+only positive evidence of authenticity anywhere in the pipeline), or nothing.
+
+**And it is deliberately one-sided, because credentials are trivially stripped.**
+[`scripts/sweep_credentials.py`](scripts/sweep_credentials.py) measures it: **0% of
+manifests survived** a re-save, a JPEG re-encode at q95 or q75, a resize, or a
+screenshot. One save and the chunk is gone. So a valid manifest is close to
+conclusive and its absence means nothing at all, and the detector abstains rather
+than reporting innocence. That is the same asymmetry the fusion already applies
+everywhere else: finding a trace is informative, failing to find one mostly is not.
+
+An earlier attempt to answer the same question from pixels, reporting "this file
+carries no camera fingerprint", was built, measured and **discarded**: an honest
+photo re-saved at JPEG q75 already fails that test 93% of the time, so it cannot
+separate *generated* from *forwarded through WhatsApp*. See
+[`docs/DETECTORS.md`](docs/DETECTORS.md).
 
 ---
 
@@ -246,7 +272,7 @@ types, the renderer, the UI, and the tests.
 ## Use
 
 ```bash
-pip install -e ".[dev,learned]"
+pip install -e ".[dev,learned,provenance]"
 
 # CLI
 groundtruth photo.jpg --render overlay.png --recover before_after.png \
@@ -305,7 +331,7 @@ docs/DETECTORS.md   detection methods, blind spots, build order
 docs/DESIGN.md      architecture, evaluation protocol, results
 src/groundtruth/
   core/             types, detector interface, registry, container IO
-  detectors/        metadata · compression · sensor · context
+  detectors/        metadata · compression · sensor · geometric · provenance · context
   recovery/         embedded previews, pre-edit reconstruction
   fusion/           weighted combination, abstention, calibration, heatmap pooling
   api/              CLI, overlay rendering, review UI
@@ -319,6 +345,7 @@ tests/fixtures.py   synthetic manipulations with ground-truth masks
 python scripts/evaluate_korus.py      # the real number: 224 photographs, ground truth
 python scripts/ablate.py              # replay fusion over detector subsets, offline
 python scripts/calibrate.py           # cross-camera + within-camera calibration
+python scripts/sweep_credentials.py <img>   # how easily content credentials strip
 python scripts/benchmark.py           # synthetic implementation check
 python scripts/sweep_readout.py       # compare block statistics on cached residuals
 python scripts/validate_readout.py    # score a fixed config on held-out pairs

@@ -19,9 +19,9 @@ jobs:
         # degradation has to stay graceful rather than becoming an ImportError.
         include:
           - name: full
-            extras: "dev,ui,learned"
+            extras: "dev,ui,learned,provenance"
           - name: without-torch
-            extras: "dev,ui"
+            extras: "dev,ui,provenance"
     name: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@v5

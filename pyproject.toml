@@ -32,6 +32,10 @@ dev = ["pytest>=8.0", "ruff>=0.4", "piexif>=1.1", "httpx2>=0.1"]
 # below the headline AUC. Installing without this extra is a supported
 # configuration; expecting the published numbers from it is not.
 learned = ["torch>=2.0"]
+# Reading C2PA Content Credentials. Optional because it is a compiled Rust binding
+# and the pixel tiers do not need it, but it is the only thing in the project that
+# can speak to a fully generated image, so a claims deployment wants it.
+provenance = ["c2pa-python>=0.37"]
 
 [project.scripts]
 groundtruth = "groundtruth.api.cli:main"

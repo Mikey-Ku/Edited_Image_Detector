@@ -1,3 +1,10 @@
 """Importing this package registers every detector."""
 
-from . import compression, context, geometric, metadata, sensor  # noqa: F401
+from . import (  # noqa: F401
+    compression,
+    context,
+    geometric,
+    metadata,
+    provenance,
+    sensor,
+)

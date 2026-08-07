@@ -35,6 +35,17 @@ class Tier(str, Enum):
     GENERATIVE = "generative"
     CONTEXT = "context"
 
+    # Not a property of the pixels at all: what the file cryptographically claims
+    # about its own origin. Separated from METADATA because the evidential standard
+    # is different. A timestamp is a string anyone can type, while a C2PA manifest
+    # is signed against a certificate chain and either verifies or does not.
+    #
+    # It also answers a question no other tier can. Every tier above asks whether a
+    # photograph was altered after capture, which presumes a capture. An image
+    # generated end to end was never captured, has no region that disagrees with its
+    # surroundings, and is cleared by all of them.
+    PROVENANCE = "provenance"
+
 
 class Decision(str, Enum):
     """Three outcomes, not two. See docs/DESIGN.md."""
