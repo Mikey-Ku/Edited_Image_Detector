@@ -132,17 +132,6 @@
   .reveal-body p { margin: 0; font-size: var(--mk-text-sm); color: var(--mk-text-muted); }
   .reveal-body b { color: var(--mk-text); }
 
-  /* ---------- how it works ---------- */
-  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--mk-8); }
-  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; gap: var(--mk-6); } }
-  .step h3 { margin: var(--mk-3) 0 var(--mk-2); font-size: var(--mk-text-base); font-weight: 600; }
-  .step p { margin: 0; font-size: var(--mk-text-sm); color: var(--mk-text-muted); }
-  .step .n {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 26px; height: 26px; border-radius: var(--mk-radius-full);
-    background: var(--mk-accent-soft); color: var(--mk-accent);
-    font-family: var(--mk-font-mono); font-size: var(--mk-text-xs); font-weight: 600;
-  }
 
   /* ---------- upload ---------- */
   h2 {
@@ -162,15 +151,6 @@
   .try { border-radius: var(--mk-radius-full); }
   .try.real { border-style: dashed; }
 
-  .ctx { margin-top: var(--mk-5); }
-  .ctx summary { font-size: var(--mk-text-sm); color: var(--mk-accent); cursor: pointer;
-                 font-weight: 550; }
-  .ctx-note { max-width: 70ch; margin-top: var(--mk-4); }
-  .ctx-note p { margin: 0 0 var(--mk-3); font-size: var(--mk-text-sm);
-                color: var(--mk-text-muted); }
-  .ctx-note b { color: var(--mk-text); font-weight: 560; }
-  .ctx-body { display: flex; gap: var(--mk-4); flex-wrap: wrap; margin-top: var(--mk-4); }
-  .ctx-body .mk-field { width: 172px; }
 
   /* ---------- progress ---------- */
   .prog { margin-top: var(--mk-6); }
@@ -379,25 +359,7 @@
     normally has to work.</p>
 </section>
 
-<section class="shell block ruled">
-  <p class="mk-eyebrow eyebrow-row">How it works</p>
-  <div class="steps">
-    <div class="step"><span class="n">1</span>
-      <h3>Read the file, not the picture</h3>
-      <p>Timestamps, the software that wrote it, and whether the file really is the format
-        its name claims. A photo taken before the policy started is a problem no matter how
-        authentic it looks.</p></div>
-    <div class="step"><span class="n">2</span>
-      <h3>Check the compression history</h3>
-      <p>JPEG compresses on a fixed 8&times;8 grid. Paste in a region from another photo and it
-        brings its own grid, misaligned with the frame around it.</p></div>
-    <div class="step"><span class="n">3</span>
-      <h3>Check the sensor physics</h3>
-      <p>A sensor captures one colour per pixel and interpolates the rest, leaving a
-        structure no editor thinks to preserve. Pasted or painted pixels were never
-        interpolated, so they do not carry it.</p></div>
-  </div>
-</section>
+
 
 <section class="shell block ruled upload">
   <h2>Check your own image</h2>
@@ -411,30 +373,7 @@
 
   <div class="tries" id="tries"></div>
 
-  <details class="ctx">
-    <summary>Optional: check the photo against a claim's dates</summary>
-    <div class="ctx-note">
-      <p><b>What this is for.</b> Everything above examines the pixels. This checks the
-        photo's own clock instead. Cameras stamp the date of capture into the file, so if
-        you tell Retrace when the policy started, it can compare the two.</p>
-      <p><b>Why it matters.</b> A photograph can be completely genuine, untouched, every
-        pixel authentic, <b>and still be fraud</b>, if it was taken of damage that already
-        existed before the policy was bought. No amount of pixel analysis catches that.
-        A date does.</p>
-      <p class="mk-hint">Leave these blank and the check simply reports that it has no
-        dates to work with, which is what the sample images do.</p>
-    </div>
-    <div class="ctx-body">
-      <label class="mk-field"><span class="mk-label">Claim reference</span>
-        <input class="mk-input mk-sm" id="claim_id" value="CLM-0001"></label>
-      <label class="mk-field"><span class="mk-label">Claimant reference</span>
-        <input class="mk-input mk-sm" id="claimant_id" value="C-0001"></label>
-      <label class="mk-field"><span class="mk-label">Policy start date</span>
-        <input class="mk-input mk-sm" id="policy_inception" type="date"></label>
-      <label class="mk-field"><span class="mk-label">Date of loss</span>
-        <input class="mk-input mk-sm" id="loss_date" type="date"></label>
-    </div>
-  </details>
+
 
   <div class="prog" id="prog" hidden>
     <div class="mk-meter"><div class="mk-meter__fill" id="progFill" style="width:0"></div></div>
@@ -583,8 +522,6 @@ async function send(input) {
   startProgress();
   const fd = new FormData();
   fd.append(isSample ? 'sample' : 'file', input);
-  for (const k of ['claim_id', 'claimant_id', 'policy_inception', 'loss_date'])
-    fd.append(k, $('#' + k).value || '');
   try {
     const r = await fetch('/api/analyse', { method: 'POST', body: fd });
     const d = await r.json();

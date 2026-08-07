@@ -4,60 +4,103 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Retrace, the science</title>
+<link rel="stylesheet" href="/static/mk-ui.css">
+
 <style>
-  :root {
-    --bg:#fff; --soft:#f7f8fa; --line:#e4e7ec; --line-2:#d3d8e0;
-    --ink:#14161b; --ink-2:#59606d; --ink-3:#8b93a1;
-    --blue:#2f5fd0; --blue-soft:#eef2fd;
-    --pass:#0f7a5f; --alert:#bb2f4a; --alert-soft:#fdeef1; --review:#a86a08; --review-soft:#fdf3e4;
-    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
-    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+  /* Same collection as the landing page, so the two pages read as one product.
+     No literal colour, font or spacing value belongs in this file. */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--mk-bg); color: var(--mk-text);
+    font-family: var(--mk-font-body); font-size: var(--mk-text-base);
+    line-height: 1.65; -webkit-font-smoothing: antialiased;
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 var(--ui);-webkit-font-smoothing:antialiased}
-  :focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:4px}
-  .shell{max-width:760px;margin:0 auto;padding:0 28px}
-  a{color:var(--blue)}
+  .shell { max-width: 760px; margin: 0 auto; padding-inline: var(--mk-6); }
+  a { color: var(--mk-accent); }
 
-  header{border-bottom:1px solid var(--line)}
-  .head{display:flex;align-items:center;gap:14px;height:62px;max-width:1060px;margin:0 auto;padding:0 28px}
-  .logo{font-size:17px;font-weight:640;letter-spacing:-.3px;text-decoration:none;color:var(--ink)}
-  .logo em{font-style:normal;color:var(--blue)}
-  .head nav{margin-left:auto;font-size:14px}
+  header { border-bottom: var(--mk-border-w) solid var(--mk-line); }
+  .head {
+    display: flex; align-items: center; gap: var(--mk-3); height: 64px;
+    max-width: 1060px; margin: 0 auto; padding-inline: var(--mk-6);
+  }
+  .logo {
+    font-family: var(--mk-font-display); font-size: var(--mk-text-lg);
+    font-weight: 600; letter-spacing: var(--mk-display-track);
+    text-decoration: none; color: var(--mk-text);
+  }
+  .logo em { font-style: normal; color: var(--mk-accent); }
+  .head nav { margin-left: auto; }
 
-  h1{font-size:36px;line-height:1.15;letter-spacing:-1px;font-weight:660;margin:56px 0 14px}
-  .lede{font-size:18px;color:var(--ink-2);margin:0 0 8px}
-  h2{font-size:24px;letter-spacing:-.5px;font-weight:640;margin:56px 0 6px;padding-top:32px;border-top:1px solid var(--line)}
-  h2:first-of-type{border-top:0;padding-top:0}
-  h3{font-size:17px;font-weight:620;margin:32px 0 8px}
-  h4{font-size:14px;font-weight:620;margin:22px 0 6px;color:var(--ink-2)}
-  p{margin:0 0 14px;color:var(--ink-2)}
-  p strong,li strong{color:var(--ink);font-weight:590}
-  ul{margin:0 0 14px;padding-left:20px;color:var(--ink-2)}
-  li{margin-bottom:6px}
+  h1 {
+    font-family: var(--mk-font-display); font-size: clamp(1.9rem, 4vw, 2.3rem);
+    line-height: 1.15; letter-spacing: var(--mk-display-track); font-weight: 600;
+    margin: var(--mk-12) 0 var(--mk-4);
+  }
+  .lede { font-size: var(--mk-text-lg); color: var(--mk-text-muted); margin: 0 0 var(--mk-2); }
+  h2 {
+    font-family: var(--mk-font-display); font-size: var(--mk-text-2xl);
+    letter-spacing: var(--mk-display-track); font-weight: 600;
+    margin: var(--mk-12) 0 var(--mk-2); padding-top: var(--mk-8);
+    border-top: var(--mk-border-w) solid var(--mk-line);
+  }
+  h2:first-of-type { border-top: 0; padding-top: 0; }
+  h3 { font-size: var(--mk-text-lg); font-weight: 600; margin: var(--mk-8) 0 var(--mk-2); }
+  h4 {
+    font-size: var(--mk-text-sm); font-weight: 600;
+    margin: var(--mk-5) 0 var(--mk-2); color: var(--mk-text);
+  }
+  p { margin: 0 0 var(--mk-4); color: var(--mk-text-muted); }
+  p strong, li strong { color: var(--mk-text); font-weight: 560; }
+  ul { margin: 0 0 var(--mk-4); padding-left: var(--mk-5); color: var(--mk-text-muted); }
+  li { margin-bottom: var(--mk-2); }
 
-  .math{background:var(--soft);border:1px solid var(--line);border-radius:10px;
-        padding:16px 18px;margin:16px 0;font:14.5px/1.7 var(--mono);color:var(--ink);overflow-x:auto}
-  .math .c{color:var(--ink-3)}
-  .where{font-size:13.5px;color:var(--ink-3);margin:-6px 0 18px;padding-left:2px}
+  .math {
+    background: var(--mk-surface-sunk); border: var(--mk-border-w) solid var(--mk-line);
+    border-radius: var(--mk-radius); padding: var(--mk-4) var(--mk-5); margin: var(--mk-4) 0;
+    font-family: var(--mk-font-mono); font-size: var(--mk-text-sm); line-height: 1.7;
+    color: var(--mk-text); overflow-x: auto;
+  }
+  .math .c { color: var(--mk-text-faint); }
+  .where {
+    font-size: var(--mk-text-sm); color: var(--mk-text-faint);
+    margin: calc(var(--mk-2) * -1) 0 var(--mk-5);
+  }
 
-  .box{border-left:3px solid var(--line-2);padding:2px 0 2px 16px;margin:18px 0}
-  .box.warn{border-left-color:var(--review);background:var(--review-soft);
-            padding:14px 16px;border-radius:0 8px 8px 0}
-  .box.bad{border-left-color:var(--alert);background:var(--alert-soft);
-           padding:14px 16px;border-radius:0 8px 8px 0}
-  .box p:last-child{margin-bottom:0}
-  .box h4{margin-top:0}
+  /* Callouts are a surface and a border, with no coloured spine. The bar was
+     doing decoration rather than carrying meaning, and three different accent
+     colours down the left of a long page read as an alert every few paragraphs. */
+  .box {
+    padding: var(--mk-4) var(--mk-5); margin: var(--mk-5) 0;
+    border: var(--mk-border-w) solid var(--mk-line);
+    border-radius: var(--mk-radius); background: var(--mk-surface-2);
+  }
+  .box p:last-child { margin-bottom: 0; }
+  .box h4 { margin-top: 0; }
 
-  table{width:100%;border-collapse:collapse;font-size:14px;margin:18px 0}
-  th{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-2);
-     font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-3);font-weight:550}
-  td{padding:9px 10px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:top}
-  td code{font:13px var(--mono);color:var(--ink)}
+  table { width: 100%; border-collapse: collapse; font-size: var(--mk-text-sm); margin: var(--mk-5) 0; }
+  th {
+    text-align: left; padding: var(--mk-2) var(--mk-3);
+    border-bottom: var(--mk-border-w) solid var(--mk-line-strong);
+    font-size: var(--mk-text-xs); text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--mk-text-faint); font-weight: 550;
+  }
+  td {
+    padding: var(--mk-2) var(--mk-3); border-bottom: var(--mk-border-w) solid var(--mk-line);
+    color: var(--mk-text-muted); vertical-align: top;
+  }
+  td code { font-family: var(--mk-font-mono); font-size: var(--mk-text-sm); color: var(--mk-text); }
 
-  .tocs{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin:28px 0 0}
-  .tocs p{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--ink-3)}
-  .tocs ol{margin:0;padding-left:20px;font-size:14.5px}
+  .tocs {
+    background: var(--mk-surface-2); border: var(--mk-border-w) solid var(--mk-line);
+    border-radius: var(--mk-radius); padding: var(--mk-5) var(--mk-6); margin: var(--mk-8) 0 0;
+  }
+  .tocs p {
+    margin: 0 0 var(--mk-2); font-family: var(--mk-font-mono);
+    font-size: var(--mk-text-xs); text-transform: uppercase; letter-spacing: 0.11em;
+    color: var(--mk-text-faint);
+  }
+  .tocs ol { margin: 0; padding-left: var(--mk-5); font-size: var(--mk-text-sm); }
+
   .tocs li{margin-bottom:4px}
 
   footer{border-top:1px solid var(--line);margin-top:64px;padding:26px 0 60px}
