@@ -396,6 +396,7 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;
 
 /* Customer-facing names. A claims handler is never shown "preview_mismatch". */
 const NAME = {
+  'provenance.content_credentials': 'Where this file says it came from',
   'context.policy_consistency': 'Claim dates and location',
   'metadata.container_identity': 'File format',
   'metadata.preview_mismatch': 'Embedded preview',
