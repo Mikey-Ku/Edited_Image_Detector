@@ -261,6 +261,56 @@ place to start for three reasons:
 Tier 5 gets added once the classical stack is solid and measured. Building it first would
 mean chasing a moving target with no reliable baseline to compare against.
 
+### What a fully generated image does to this pipeline, measured
+
+A model asked to edit a photograph does not patch the original; it regenerates the whole
+frame. So there is no region that disagrees with its surroundings, and the detector that
+carries most of the result **abstains** rather than firing:
+
+```
+real photo, untouched          AUTO_CLEAR  P=0.240   3 of 7 detectors applicable
+whole-frame resynthesis        AUTO_CLEAR  P=0.255   2 of 7 detectors applicable
+                                                     sensor.noiseprint_structure abstained
+```
+
+Cleared, within 0.015 of an untouched photograph. This pipeline finds *local*
+inconsistency, and a uniformly synthetic image has nothing to be locally inconsistent
+with.
+
+### The obvious fix, and why it does not work
+
+The abstention is silent, and it looks like it is throwing away a fact worth reporting:
+an image carrying no sensor fingerprint at all was never produced by a camera, which in a
+claims inbox is itself suspicious. Turning that silence into a finding is cheap to build
+and sounds right.
+
+`scripts/sweep_provenance.py` measures whether it survives contact with a real inbox.
+Frame-level period-2 structure, 14 camera originals, put through the laundering an honest
+photograph actually receives:
+
+| condition | median structure | below threshold |
+|---|---|---|
+| camera original | 19.78 | 0% |
+| JPEG q95 | 11.86 | 7% |
+| JPEG q75 | 3.62 | **93%** |
+| JPEG q50 | 2.22 | **100%** |
+| half size, q80 | 3.12 | **100%** |
+| screenshot round trip | 2.41 | **100%** |
+| whole-frame resynthesis | 2.56 | **100%** |
+
+**An honest photograph re-saved at quality 75 is indistinguishable from a generated image
+by this measure.** Both sit near 2 to 3. The detector would accuse essentially every real
+photo that arrived through email or a messaging app, and it cannot separate *generated*
+from *forwarded*.
+
+So it is not built. The useful number that falls out is a shelf life: **the camera
+fingerprint survives roughly one high-quality JPEG save and is gone by q75.** That is a
+real constraint on the whole sensor tier, not only on this idea, and it is the reason the
+headline results are measured on camera-original TIFFs.
+
+This is the fifth idea in this document killed by measurement before shipping, and the
+cheapest one to have been wrong about.
+
 ---
 
 ## Build order

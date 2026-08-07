@@ -19,6 +19,17 @@ it is **applicable zero times**, so none of the measured accuracy comes from it.
 
 `docs/DEMO.md` walks through both, with the images to reproduce them.
 
+**It does not detect AI-generated images, and that is measured rather than assumed.** A
+model asked to edit a photograph regenerates the whole frame, so nothing is locally
+inconsistent with anything else and the strongest detector abstains: a resynthesised
+image comes back `AUTO_CLEAR` at 0.255, against 0.240 for an untouched photograph. The
+obvious fix, reporting "this file carries no camera fingerprint at all", was built and
+measured and **does not work**: an honest photo re-saved at JPEG q75 already fails that
+test 93% of the time, so it cannot separate *generated* from *forwarded through
+WhatsApp*. The numbers are in [`docs/DETECTORS.md`](docs/DETECTORS.md), the sweep in
+[`scripts/sweep_provenance.py`](scripts/sweep_provenance.py). What this is good at is
+hand-editing inside a real photograph, which is still most claim fraud.
+
 ---
 
 ## Status
