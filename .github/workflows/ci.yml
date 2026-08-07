@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both supported install shapes are exercised, because they are genuinely
+        # different systems. Without torch the two fingerprint detectors report
+        # "not applicable" and the pipeline runs on the remaining tiers -- that is a
+        # documented configuration, so it has to keep working, and the graceful
+        # degradation has to stay graceful rather than becoming an ImportError.
+        include:
+          - name: full
+            extras: "dev,ui,learned"
+          - name: without-torch
+            extras: "dev,ui"
+    name: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install CPU torch
+        if: matrix.name == 'full'
+        # The default wheel drags in the CUDA stack: gigabytes of runtime the
+        # runner has no GPU for. Installing it first pins the CPU build so the
+        # package install below resolves against it.
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install
+        run: pip install -e ".[${{ matrix.extras }}]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        run: pytest -q
+
+      - name: Detectors degrade rather than crash without torch
+        if: matrix.name == 'without-torch'
+        # A regression here would be invisible to the suite above: the learned
+        # tests skip themselves when torch is missing, so "all green" on this leg
+        # says nothing about whether the detectors handled its absence. This asserts
+        # the abstention path directly.
+        run: |
+          python - <<'PY'
+          from groundtruth.core.detector import get
+          for det_id in ("sensor.noiseprint_structure", "sensor.noiseprint_anomaly"):
+              ok, why = get(det_id).applies_to(None)
+              assert ok is False, f"{det_id} claimed to apply with no torch installed"
+              assert "pytorch" in why.lower(), f"{det_id} gave a confusing reason: {why}"
+              print(f"{det_id}: abstains cleanly -- {why}")
+          PY
