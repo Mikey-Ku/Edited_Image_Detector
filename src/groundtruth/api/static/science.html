@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Retrace — the science</title>
+<title>Retrace, the science</title>
 <style>
   :root {
     --bg:#fff; --soft:#f7f8fa; --line:#e4e7ec; --line-2:#d3d8e0;
@@ -80,7 +80,7 @@
   <p>On this page</p>
   <ol>
     <li><a href="#premise">Why not just train a classifier</a></li>
-    <li><a href="#preview">Embedded preview — recovering the original</a></li>
+    <li><a href="#preview">Embedded preview, recovering the original</a></li>
     <li><a href="#noise">Sensor noise inconsistency</a></li>
     <li><a href="#grid">JPEG block grid misalignment</a></li>
     <li><a href="#ela">Error Level Analysis, and why it's weak</a></li>
@@ -97,14 +97,14 @@
   detector built that way is always chasing.</p>
 <p>Retrace instead measures properties of <strong>how cameras and codecs physically work</strong>.
   Those don't change when a new editor is released. The trade is that each measurement is
-  narrow, has a knowable failure mode, and can be checked by hand — which is what this page
+  narrow, has a knowable failure mode, and can be checked by hand, which is what this page
   is for.</p>
 
 <h2 id="preview">2. Embedded preview</h2>
 <p>The only measurement here that isn't statistical.</p>
 <p>JPEG, HEIC, TIFF and most RAW formats store a small second copy of the image inside the
   file. Many editors rewrite the main image and never regenerate that copy. When that
-  happens, <strong>the preview is a photograph of the original</strong> — real pixels, not an
+  happens, <strong>the preview is a photograph of the original</strong>. Real pixels, not an
   inference.</p>
 
 <h4>How the comparison is made</h4>
@@ -119,14 +119,14 @@
 b = mean(y) − g · mean(x)
 x' = clip(g · x + b, 0, 255)</div>
 <p class="where">Gain and offset are <em>global</em>, so a genuinely altered region cannot be
-  absorbed by the fit — only whole-frame tone shifts can.</p>
+  absorbed by the fit. Only whole-frame tone shifts can.</p>
 
 <div class="math">δ(i,j) = mean over channels of |y(i,j) − x'(i,j)| / 255
 τ      = max(0.05, median(δ) + 6 · 1.4826 · MAD(δ))
 change = clip((δ − τ) / 0.08, 0, 1)</div>
 <p class="where">τ has an <strong>absolute floor</strong>. A purely relative threshold reports the
   same fraction of any frame as changed whether or not anything was edited, because every
-  distribution has a top few percent. 0.05 ≈ 13 intensity levels — far beyond re-encoding
+  distribution has a top few percent. 0.05 ≈ 13 intensity levels, far beyond re-encoding
   cost, far below a real edit.</p>
 
 <div class="box">
@@ -147,7 +147,7 @@ change = clip((δ − τ) / 0.08, 0, 1)</div>
 
 σ̂ = MAD(HH) / 0.6745        <span class="c">// MAD = median(|HH − median(HH)|)</span></div>
 <p class="where">MAD, not standard deviation. A plain σ over a block containing an edge
-  reports the edge, not the noise — every texture boundary becomes a false positive. Edges
+  reports the edge, not the noise, so every texture boundary becomes a false positive. Edges
   are outliers, and MAD ignores outliers.</p>
 
 <h4>Finding regions that disagree</h4>
@@ -166,14 +166,14 @@ reported = flagged blocks in connected components of size ≥ 2</div>
   detections, which raising the threshold would.</p>
 
 <div class="box warn">
-  <h4>The assumption that breaks — see §8</h4>
+  <h4>The assumption that breaks, see §8</h4>
   <p>This treats the frame as having <strong>one global noise level</strong>. That is false for
     real photographs, and it is the single reason Retrace does not currently work on them.</p>
 </div>
 
 <h2 id="grid">4. JPEG block grid misalignment</h2>
 <p>JPEG divides the image into 8×8 blocks anchored to the origin and quantises each
-  independently. That leaves faint discontinuities at every block boundary — a grid, baked
+  independently. That leaves faint discontinuities at every block boundary: a grid, baked
   into the pixel values.</p>
 <p>Paste a region from another JPEG and it brings its own grid, shifted by wherever it
   landed. <strong>Only 1 offset in 64 lands back in phase.</strong> This is a geometric
@@ -181,7 +181,7 @@ reported = flagged blocks in connected components of size ≥ 2</div>
   compression grid is offset from its surroundings, and no camera produces that."</p>
 
 <h4>Measuring the grid</h4>
-<p>The naive measure — the size of the step across a candidate boundary — is useless on
+<p>The naive measure, the size of the step across a candidate boundary, is useless on
   textured content, because texture produces large steps everywhere and lifts all eight
   phases together. What identifies a block boundary is that the step <em>there</em> exceeds
   the steps immediately beside it:</p>
@@ -197,13 +197,13 @@ phase = argmax E,   snr = (max E − mean E_others) / max(std E_others, 0.05)</d
 <p>Phase is estimated per 64px window (stride 32). A window is used only if
   <code>snr ≥ 3</code>. The frame's own phase is the mode across confident windows, and a
   region is reported only when several windows <strong>agree with each other</strong> on the
-  same foreign phase — not merely differ from the host.</p>
+  same foreign phase, not merely differ from the host.</p>
 
 <h4>Measured operating envelope</h4>
 <table>
   <tr><th>Condition</th><th>Result</th></tr>
   <tr><td>Composite saved at q ≥ 92</td><td>Detected</td></tr>
-  <tr><td>Composite saved at q = 88</td><td><strong>Complete miss</strong> — 0 of ~100 readable windows</td></tr>
+  <tr><td>Composite saved at q = 88</td><td><strong>Complete miss</strong>, 0 of ~100 readable windows</td></tr>
   <tr><td>Smooth or low-texture image</td><td>No readable grid; abstains</td></tr>
   <tr><td>Paste offset ≡ (0,0) mod 8</td><td>Invisible by construction</td></tr>
 </table>
@@ -216,7 +216,7 @@ phase = argmax E,   snr = (max E − mean E_others) / max(std E_others, 0.05)</d
 <p><strong>ELA is included as a baseline to beat, not as a signal.</strong> It is the most
   famous and most over-trusted technique in this field:</p>
 <ul>
-  <li>It confounds texture with tampering — busy regions of an authentic photo light up
+  <li>It confounds texture with tampering: busy regions of an authentic photo light up
     exactly like a splice.</li>
   <li>It is meaningless on images that were never JPEG, or saved near the probe quality.</li>
   <li>It produces confident-looking output on random input, which is what makes it dangerous.</li>
@@ -227,7 +227,7 @@ phase = argmax E,   snr = (max E − mean E_others) / max(std E_others, 0.05)</d
 <h2 id="context">6. Claim context</h2>
 <p>The cheapest and most decisive check, using no machine learning at all. If a photograph's
   EXIF capture time <strong>precedes the policy start date</strong>, the damage predates the
-  coverage — and pixel-perfect authenticity is irrelevant.</p>
+  coverage, and pixel-perfect authenticity is irrelevant.</p>
 <p>It is worth stating plainly that a single integer comparison outranks every measurement
   above it on this page. The most sophisticated system is not always the smartest one.</p>
 
@@ -248,7 +248,7 @@ P(edited) = sigmoid(pooled)</div>
 
 <div class="box bad">
   <h4>Known problems with this, stated plainly</h4>
-  <p><strong>1.</strong> It assumes the detectors are independent. They are not — several
+  <p><strong>1.</strong> It assumes the detectors are independent. They are not. Several
     compression measurements read the same underlying artefacts and will agree for reasons
     unrelated to editing.<br>
     <strong>2.</strong> The output is <em>not calibrated</em>. A reported 0.9 does not mean
@@ -262,7 +262,7 @@ P(edited) = sigmoid(pooled)</div>
 <p>Everything above was verified against manipulations generated in-house, with pixel-exact
   ground truth. Those tests pass. Then it was measured against the
   <a href="https://pkorus.pl/downloads/dataset-realistic-tampering">Korus Realistic Tampering
-  Dataset</a> — 112 real photographs edited by hand in GIMP and Affinity Photo, with their
+  Dataset</a>, 112 real photographs edited by hand in GIMP and Affinity Photo, with their
   112 matched unedited originals.</p>
 
 <table>
@@ -284,17 +284,17 @@ r1e3303ebt     192       220     <span class="c">← unedited scores higher</spa
 r2410fbc3t     256       260     <span class="c">← unedited scores higher</span>
 r36610622t       0       317     <span class="c">← unedited flagged, edited clean</span></div>
 <p>Mean separation is <strong>−0.065</strong>. The edited image scores higher than its own
-  original on 4 of 14 pairs — worse than a coin flip.</p>
+  original on 4 of 14 pairs, worse than a coin flip.</p>
 <p>The cause is §3's assumption. <strong>Photon shot noise scales with the square root of
   signal</strong>, so bright regions of a completely untouched photograph are genuinely
   noisier than dark ones. Hundreds of blocks legitimately deviate from any single global
-  level — and they deviate <em>identically</em> in both versions, because the two files are
+  level, and they deviate <em>identically</em> in both versions, because the two files are
   the same photograph apart from a region covering ~5% of the frame.</p>
 
 <div class="box bad">
   <h4>The real lesson is about the test, not the detector</h4>
   <p>The synthetic fixture generated a scene with <em>uniform</em> noise and pasted in a
-    region with a different uniform level — precisely the world the detector models. It
+    region with a different uniform level, precisely the world the detector models. It
     scored 0.99 because <strong>the test could not have failed.</strong> It was measuring
     whether the code matched its own premise, not whether the premise was true.</p>
   <p>Synthetic fixtures verify that a detector fires in the right place <em>given its
@@ -303,7 +303,7 @@ r36610622t       0       317     <span class="c">← unedited flagged, edited cl
 
 <h4>What has to change</h4>
 <ul>
-  <li>Model noise as a <strong>function of local brightness</strong> — a noise level function —
+  <li>Model noise as a <strong>function of local brightness</strong>, a noise level function,
     and flag deviation from that model rather than from a constant.</li>
   <li>Add a matched-pair regression harness, so scene-level variation cancels.</li>
   <li>Validate the compression measurements on a JPEG corpus. The Korus images are TIFF, so
