@@ -111,6 +111,46 @@ def test_upload_without_a_file_is_a_client_error_not_a_crash(client):
     assert client.post("/api/analyse").status_code in (400, 422)
 
 
+def test_analysing_a_sample_does_not_delete_it(client):
+    """Samples are now analysed where they lie, so the residual cache can hit.
+
+    The cleanup in the request handler used to unlink unconditionally, which was
+    correct while every request worked on a copy. Against a real path it would
+    delete the repository's own sample files, one per page load.
+    """
+    from groundtruth.api.server import _SAMPLES
+
+    target = _SAMPLES / "real_courtyard_cloned_window.jpg"
+    assert target.is_file()
+    before = target.stat().st_size
+    assert client.post("/api/analyse", data={"sample": target.name}).status_code == 200
+    assert target.is_file(), "analysing a sample deleted it"
+    assert target.stat().st_size == before
+
+
+def test_repeat_sample_analysis_is_served_from_cache(client):
+    """Second run of the same sample must be much faster than the first.
+
+    Loose bound rather than a tight one, because CI machines vary. The failure this
+    guards against is not slowness, it is the caching silently breaking again, which
+    costs about eight seconds per example on the landing page.
+    """
+    import time
+
+    name = "real_courtyard_cloned_window.jpg"
+    t0 = time.perf_counter()
+    assert client.post("/api/analyse", data={"sample": name}).status_code == 200
+    first = time.perf_counter() - t0
+
+    t1 = time.perf_counter()
+    assert client.post("/api/analyse", data={"sample": name}).status_code == 200
+    second = time.perf_counter() - t1
+
+    assert second < max(first * 0.6, 0.05), (
+        f"repeat analysis not cached: first {first:.2f}s, second {second:.2f}s"
+    )
+
+
 def test_samples_endpoint_lists_bundled_images(client):
     r = client.get("/api/samples")
     assert r.status_code == 200

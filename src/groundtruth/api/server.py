@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import base64
 import io
+import logging
 import tempfile
+import threading
+from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
 
@@ -25,7 +28,16 @@ from ..pipeline.runner import analyse
 from ..recovery.reconstruct import reconstruct
 from .render import colourise, duplicate_pair, overlay
 
-app = FastAPI(title="Retrace", docs_url="/api/docs")
+log = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    _warm_examples()
+    yield
+
+
+app = FastAPI(title="Retrace", docs_url="/api/docs", lifespan=_lifespan)
 
 _STATIC = Path(__file__).parent / "static"
 
@@ -120,6 +132,92 @@ def _jsonable(value):
     return value
 
 
+# Rendered results for the bundled samples, keyed by (name, mtime, claim context).
+# The sample files never change between requests, so recomputing their analysis on
+# every page load buys nothing: the landing page runs two of them before it can show
+# anything, and that was the whole of its load time. Uploads are never cached, since
+# each one is genuinely new.
+_SAMPLE_CACHE: dict[tuple, dict] = {}
+_SAMPLE_CACHE_MAX = 16
+
+
+def _cached_sample(key: tuple) -> dict | None:
+    return _SAMPLE_CACHE.get(key)
+
+
+def _store_sample(key: tuple, payload: dict) -> None:
+    if len(_SAMPLE_CACHE) >= _SAMPLE_CACHE_MAX:
+        _SAMPLE_CACHE.pop(next(iter(_SAMPLE_CACHE)))
+    _SAMPLE_CACHE[key] = payload
+
+
+_CACHE_LOCK = threading.Lock()
+_INFLIGHT: dict[tuple, threading.Lock] = {}
+
+
+def _analyse_sample(key: tuple, path: Path, display_name: str, context) -> dict:
+    """Cached sample analysis, computed at most once per key even under concurrency.
+
+    Without the lock this is a thundering herd, and measurably so. The startup
+    warm-up and the page's own two requests all arrive within a second of each
+    other, all miss the empty cache, and all start the same torch inference: three
+    copies of the same eight-second job competing for the same cores. Measured that
+    way, the second example took **thirty seconds** to return, far worse than having
+    no warm-up at all.
+
+    Double-checked around the lock, so the winner computes and everyone else picks
+    up the finished result instead of repeating it.
+    """
+    hit = _cached_sample(key)
+    if hit is not None:
+        return hit
+
+    with _CACHE_LOCK:
+        lock = _INFLIGHT.setdefault(key, threading.Lock())
+
+    with lock:
+        hit = _cached_sample(key)
+        if hit is not None:
+            return hit
+        payload = _build_payload(path, display_name, context)
+        _store_sample(key, payload)
+
+    with _CACHE_LOCK:
+        _INFLIGHT.pop(key, None)
+    return payload
+
+
+# The two samples the landing page analyses before it can render anything.
+_WARM_ON_START = ("real_courtyard_cloned_window.jpg", "real_rooftops_stale_preview.jpg")
+
+
+def _warm_examples() -> None:
+    """Analyse the landing-page examples in the background as the server comes up.
+
+    Caching alone only helps the second visitor. The first one still waits through
+    two full analyses, roughly eight seconds each on a 1920x1080 frame, staring at
+    empty panels. Doing that work at startup moves the wait to a moment when nobody
+    is looking.
+
+    On a thread, and deliberately silent on failure: this is an optimisation, and a
+    server that refuses to start because a sample is missing would be a worse
+    outcome than a slow first page.
+    """
+    def run() -> None:
+        for name in _WARM_ON_START:
+            try:
+                path = _SAMPLES / name
+                if not path.is_file():
+                    continue
+                key = (name, path.stat().st_mtime, "", "", "unknown", "unknown")
+                _analyse_sample(key, path, name, None)
+            except Exception:
+                log.debug("could not pre-warm %s", name, exc_info=True)
+
+    if _SAMPLES.is_dir():
+        threading.Thread(target=run, name="warm-examples", daemon=True).start()
+
+
 if _SAMPLES.is_dir():
     app.mount("/samples", StaticFiles(directory=str(_SAMPLES)), name="samples")
 
@@ -170,108 +268,133 @@ async def analyse_upload(
         candidate = (_SAMPLES / sample).resolve()
         if not candidate.is_file() or _SAMPLES.resolve() not in candidate.parents:
             raise HTTPException(404, f"no such sample: {sample}")
-        raw = candidate.read_bytes()
-        display_name = candidate.name
+        # Analysed where it lies, rather than copied to a temp file first. The
+        # noiseprint residual is memoised on (path, quality, mtime), and a fresh
+        # random temp name every request meant that cache could never hit: the two
+        # landing-page examples paid full torch inference on every page load, about
+        # eight seconds each. A stable path makes repeat loads effectively free.
+        path, display_name, temporary = candidate, candidate.name, False
+        cache_key = (
+            candidate.name, candidate.stat().st_mtime,
+            policy_inception, loss_date, claim_id, claimant_id,
+        )
+
     elif file is not None:
         raw = await file.read()
         display_name = file.filename or "upload"
         if not raw:
             raise HTTPException(400, "empty upload")
+        with tempfile.NamedTemporaryFile(
+            suffix=Path(display_name).suffix or ".jpg", delete=False
+        ) as tmp:
+            tmp.write(raw)
+            path = Path(tmp.name)
+        temporary = True
     else:
         raise HTTPException(400, "provide either a file upload or a sample name")
 
-    with tempfile.NamedTemporaryFile(
-        suffix=Path(display_name).suffix or ".jpg", delete=False
-    ) as tmp:
-        tmp.write(raw)
-        path = Path(tmp.name)
+    inception = _parse_date(policy_inception)
+    loss = _parse_date(loss_date)
+    context = (
+        ClaimContext(
+            claim_id=claim_id,
+            claimant_id=claimant_id,
+            policy_inception=inception,
+            loss_date=loss,
+        )
+        if (inception or loss)
+        else None
+    )
 
     try:
-        inception = _parse_date(policy_inception)
-        loss = _parse_date(loss_date)
-        context = (
-            ClaimContext(
-                claim_id=claim_id,
-                claimant_id=claimant_id,
-                policy_inception=inception,
-                loss_date=loss,
-            )
-            if (inception or loss)
-            else None
-        )
-
-        case = ImageCase(image_path=path, context=context)
-        verdict = analyse(case)
-        base = case.pixels()
-
-        images: dict[str, str | None] = {"original": _data_uri(base)}
-        regions: list[dict] = []
-        proof: dict | None = None
-        if verdict.heatmap is not None:
-            images["overlay"] = _data_uri(overlay(base, verdict.heatmap))
-            images["heatmap"] = _data_uri(colourise(verdict.heatmap))
-            regions = peak_regions(verdict.heatmap, threshold=0.5)
-
-            # When two regions were flagged, the finding can be shown rather than
-            # asserted: crop both and put them side by side. Absent for most images,
-            # which is why the UI treats it as an extra panel and not a fixture.
-            made = duplicate_pair(base, regions)
-            if made is not None:
-                pair_img, proof = made
-                images["proof"] = _data_uri(pair_img)
-
-        recovery = None
-        recon = reconstruct(path)
-        if recon is not None:
-            recovery = {
-                "fidelity": recon.fidelity.value,
-                "is_evidence": recon.is_evidence,
-                "source": recon.source,
-                "preview_size": list(recon.preview_size),
-                "changed_fraction": round(recon.changed_fraction, 4),
-                "cropped": recon.cropped,
-                "caveat": recon.caveat,
-                "regions": recon.regions[:5],
-            }
-            images["before"] = _data_uri(recon.before)
-            images["changed"] = _data_uri(colourise(recon.difference))
-
-        return JSONResponse(
-            {
-                "filename": display_name,
-                "container": {
-                    "actual": case.container.actual.value,
-                    "claimed": case.container.claimed.value,
-                    "mismatch": case.container.extension_mismatch,
-                    "lossy": case.container.actual.lossy,
-                },
-                "size": [int(base.shape[1]), int(base.shape[0])],
-                "verdict": {
-                    "probability": round(verdict.manipulated_probability, 4),
-                    "decision": verdict.decision.value,
-                    "explanation": verdict.explanation,
-                    "localised_by": verdict.localised_by,
-                },
-                "evidence": [
-                    {
-                        "detector_id": e.detector_id,
-                        "tier": e.tier.value,
-                        "applicable": e.applicable,
-                        "score": round(e.score, 4),
-                        "confidence": round(e.confidence, 4),
-                        "explanation": e.explanation,
-                        "localises": e.heatmap is not None,
-                        "details": _jsonable(
-                            {k: v for k, v in e.details.items() if k != "regions"}
-                        ),
-                    }
-                    for e in verdict.evidence
-                ],
-                "regions": regions[:8],
-                "proof": proof,
-                "recovery": recovery,
-                "images": images,
-            }
-        )
+        if temporary:
+            payload = _build_payload(path, display_name, context)
+        else:
+            payload = _analyse_sample(cache_key, path, display_name, context)
+        return JSONResponse(payload)
     finally:
-        path.unlink(missing_ok=True)
+        # Only ever delete what this request created. Deleting unconditionally would
+        # now remove a bundled sample from the repository.
+        if temporary:
+            path.unlink(missing_ok=True)
+
+
+def _build_payload(
+    path: Path, display_name: str, context: ClaimContext | None = None
+) -> dict:
+    """Run the pipeline over one file and render everything the UI shows.
+
+    Split out of the endpoint so the startup warm-up can call it directly instead of
+    making an HTTP request to its own process.
+    """
+    case = ImageCase(image_path=path, context=context)
+    verdict = analyse(case)
+    base = case.pixels()
+
+    images: dict[str, str | None] = {"original": _data_uri(base)}
+    regions: list[dict] = []
+    proof: dict | None = None
+    if verdict.heatmap is not None:
+        images["overlay"] = _data_uri(overlay(base, verdict.heatmap))
+        images["heatmap"] = _data_uri(colourise(verdict.heatmap))
+        regions = peak_regions(verdict.heatmap, threshold=0.5)
+
+        # When two regions were flagged, the finding can be shown rather than
+        # asserted: crop both and put them side by side. Absent for most images,
+        # which is why the UI treats it as an extra panel and not a fixture.
+        made = duplicate_pair(base, regions)
+        if made is not None:
+            pair_img, proof = made
+            images["proof"] = _data_uri(pair_img)
+
+    recovery = None
+    recon = reconstruct(path)
+    if recon is not None:
+        recovery = {
+            "fidelity": recon.fidelity.value,
+            "is_evidence": recon.is_evidence,
+            "source": recon.source,
+            "preview_size": list(recon.preview_size),
+            "changed_fraction": round(recon.changed_fraction, 4),
+            "cropped": recon.cropped,
+            "caveat": recon.caveat,
+            "regions": recon.regions[:5],
+        }
+        images["before"] = _data_uri(recon.before)
+        images["changed"] = _data_uri(colourise(recon.difference))
+
+    return {
+        "filename": display_name,
+        "container": {
+            "actual": case.container.actual.value,
+            "claimed": case.container.claimed.value,
+            "mismatch": case.container.extension_mismatch,
+            "lossy": case.container.actual.lossy,
+        },
+        "size": [int(base.shape[1]), int(base.shape[0])],
+        "verdict": {
+            "probability": round(verdict.manipulated_probability, 4),
+            "decision": verdict.decision.value,
+            "explanation": verdict.explanation,
+            "localised_by": verdict.localised_by,
+        },
+        "evidence": [
+            {
+                "detector_id": e.detector_id,
+                "tier": e.tier.value,
+                "applicable": e.applicable,
+                "score": round(e.score, 4),
+                "confidence": round(e.confidence, 4),
+                "explanation": e.explanation,
+                "localises": e.heatmap is not None,
+                "details": _jsonable(
+                    {k: v for k, v in e.details.items() if k != "regions"}
+                ),
+            }
+            for e in verdict.evidence
+        ],
+        "regions": regions[:8],
+        "proof": proof,
+        "recovery": recovery,
+        "images": images,
+    }
