@@ -12,9 +12,14 @@ What is wrong with it, and must be fixed before any headline number is reported:
    time", so the abstention thresholds below are not yet meaningful.
 3. Weights are hand-set rather than learned.
 
-Replace with a learned fusion (logistic regression or small GBM over detector
-outputs) plus explicit calibration, and verify on a reliability diagram. Until
-then, treat these numbers as ordering, not probability.
+On (2), `fusion/calibration.py` now fits the missing monotonic map and
+`scripts/calibrate.py` measures it. The measurement is why `fuse()` still defaults
+to no calibration: the correction is real and learnable within a camera, but the
+two Korus sensors want significantly different slopes (p = 0.02), so a single
+global calibrator would export one sensor's correction to another. Passing a
+`Calibrator` is therefore opt-in and belongs to whoever has labelled data for the
+camera in question. Absent that, treat these numbers as ordering, not probability
+-- which is exactly what the default does.
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..core.types import Decision, Evidence, Verdict
+from .calibration import Calibrator
 
 # Below AUTO_CLEAR we clear it; above FLAG we flag it; the band between the two,
 # and anything we are not confident about, goes to a human.
@@ -40,13 +46,23 @@ def _logit(p: float) -> float:
     return float(np.log(p / (1.0 - p)))
 
 
-def fuse(evidence: list[Evidence]) -> Verdict:
+def fuse(evidence: list[Evidence], calibrator: Calibrator | None = None) -> Verdict:
     """Combine detector evidence into a single verdict.
 
     Detectors that reported ``applicable=False`` are excluded entirely rather
     than folded in as neutral -- "I cannot speak to this" and "I looked and found
     nothing" are different claims and averaging them together is how a fused
     score quietly becomes meaningless.
+
+    ``calibrator`` maps the pooled score onto a probability scale. It is optional
+    and defaults to off, for the reason in the module docstring: a calibrator fitted
+    on one camera does not transfer to another, so applying one by default would
+    make the number look more trustworthy while making it less true. Supply one only
+    when it was fitted on labelled images from the camera being scored.
+
+    Note that a calibrator changes the *meaning* of the thresholds below but never
+    the ranking, so the decision boundaries move even though no image's position
+    relative to any other does.
     """
     usable = [e for e in evidence if e.applicable and e.confidence > 0]
 
@@ -87,6 +103,8 @@ def fuse(evidence: list[Evidence]) -> Verdict:
     logits = np.array([_logit(e.score) for e in usable], dtype=float)
     pooled = float((weights * logits).sum() / weights.sum())
     prob = float(1.0 / (1.0 + np.exp(-pooled)))
+    if calibrator is not None:
+        prob = float(calibrator.apply(prob))
 
     # Aggregate confidence is computed from RAW confidence, not the weights above.
     # The negative discount governs how much each reading moves the score; it must
