@@ -3,231 +3,257 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Retrace — check whether a photo has been edited</title>
+<title>Retrace, check whether a photo has been edited</title>
+
+<!--
+  Styling comes from mk-ui, Michael's own element collection, vendored at
+  /static/mk-ui.css. Its Layer 1 is one plain stylesheet with no build step,
+  specifically so it can drop into a page like this one. Everything below is
+  either an mk-ui class or a Retrace-specific rule built from mk-ui tokens.
+  No literal colour, font or spacing value should appear in this file.
+-->
+<link rel="stylesheet" href="/static/mk-ui.css">
+
 <style>
-  :root {
-    --bg: #ffffff;
-    --soft: #f7f8fa;
-    --line: #e4e7ec;
-    --line-2: #d3d8e0;
-    --ink: #14161b;
-    --ink-2: #59606d;
-    --ink-3: #8b93a1;
-    --blue: #2f5fd0;
-    --blue-soft: #eef2fd;
-    --pass: #0f7a5f;
-    --pass-soft: #e8f5f1;
-    --alert: #bb2f4a;
-    --alert-soft: #fdeef1;
-    --review: #a86a08;
-    --review-soft: #fdf3e4;
-    --plate: #6b6e75;
-    --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
-    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
-    --shell: 1060px;
+  /* ---------- page frame ---------- */
+  body {
+    margin: 0;
+    background: var(--mk-bg);
+    color: var(--mk-text);
+    font-family: var(--mk-font-body);
+    font-size: var(--mk-text-base);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
   }
   * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font: 16px/1.6 var(--ui); -webkit-font-smoothing: antialiased;
-  }
-  :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 4px; }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
-  .shell { max-width: var(--shell); margin: 0 auto; padding: 0 28px; }
   [hidden] { display: none !important; }
+  .shell { max-width: 1060px; margin: 0 auto; padding-inline: var(--mk-6); }
+
+  /* Retrace maps its three outcomes onto mk-ui's semantic trio. Auto-clear is
+     the accent, because in this collection "ok" and "accent" are the same
+     colour and a cleared claim is the good outcome, not a neutral one. */
+  .t-pass  { --tone: var(--mk-ok);     --tone-soft: var(--mk-ok-soft); }
+  .t-alert { --tone: var(--mk-danger); --tone-soft: var(--mk-danger-soft); }
+  .t-review{ --tone: var(--mk-warn);   --tone-soft: var(--mk-warn-soft); }
 
   /* ---------- header ---------- */
-  header { border-bottom: 1px solid var(--line); }
-  .head { display: flex; align-items: center; gap: 10px; height: 62px; }
-  .logo { font-size: 17px; font-weight: 640; letter-spacing: -0.3px; }
-  .logo em { font-style: normal; color: var(--blue); }
-  .head nav { margin-left: auto; font-size: 14px; }
-  .head nav a { color: var(--blue); text-decoration: none; }
-  .head nav a:hover { text-decoration: underline; }
+  header { border-bottom: var(--mk-border-w) solid var(--mk-line); }
+  .head { display: flex; align-items: center; gap: var(--mk-3); height: 64px; }
+  .logo {
+    font-family: var(--mk-font-display);
+    font-size: var(--mk-text-lg);
+    font-weight: 600;
+    letter-spacing: var(--mk-display-track);
+  }
+  .logo em { font-style: normal; color: var(--mk-accent); }
+  .head nav { margin-left: auto; }
 
   /* ---------- hero ---------- */
-  .hero { padding: 66px 0 40px; }
-  h1 { margin: 0 0 16px; font-size: 40px; line-height: 1.15; letter-spacing: -1.1px;
-       font-weight: 660; max-width: 17ch; }
-  .lede { margin: 0; font-size: 18px; line-height: 1.6; color: var(--ink-2); max-width: 62ch; }
-  .lede b { color: var(--ink); font-weight: 560; }
+  .hero { padding: var(--mk-12) 0 var(--mk-8); }
+  h1 {
+    margin: 0 0 var(--mk-4);
+    font-family: var(--mk-font-display);
+    font-size: clamp(2rem, 5vw, 2.6rem);
+    line-height: 1.12;
+    letter-spacing: var(--mk-display-track);
+    font-weight: 600;
+    max-width: 17ch;
+  }
+  .lede { margin: 0; font-size: var(--mk-text-lg); color: var(--mk-text-muted); max-width: 62ch; }
+  .lede b { color: var(--mk-text); font-weight: 550; }
 
   /* ---------- worked example ---------- */
-  .example { padding: 8px 0 60px; }
-  .eyebrow { font: 12px/1 var(--mono); letter-spacing: 1.2px; text-transform: uppercase;
-             color: var(--ink-3); margin: 0 0 18px; }
-  .strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  section.block { padding: var(--mk-8) 0; }
+  section.ruled { border-top: var(--mk-border-w) solid var(--mk-line); }
+  .eyebrow-row { margin: 0 0 var(--mk-5); }
+  .strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--mk-5); }
   @media (max-width: 760px) { .strip { grid-template-columns: 1fr; } }
-  .frame { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); }
-  .frame .pic { background: var(--plate); display: flex; align-items: center;
-                justify-content: center; aspect-ratio: 16 / 9; overflow: hidden; }
+  .frame { overflow: hidden; padding: 0; }
+  .frame .pic {
+    background: var(--mk-surface-sunk);
+    display: flex; align-items: center; justify-content: center;
+    aspect-ratio: 16 / 9; overflow: hidden;
+  }
   .frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .frame .cap { padding: 13px 15px; border-top: 1px solid var(--line); }
-  .frame .cap b { display: block; font-size: 14px; font-weight: 580; margin-bottom: 3px; }
-  .frame .cap span { font-size: 13.5px; color: var(--ink-2); line-height: 1.5; }
+  .frame .cap { padding: var(--mk-3) var(--mk-4); border-top: var(--mk-border-w) solid var(--mk-line); }
+  .frame .cap b { display: block; font-size: var(--mk-text-sm); font-weight: 580; margin-bottom: 2px; }
+  .frame .cap span { font-size: var(--mk-text-sm); color: var(--mk-text-muted); }
+  .aside {
+    margin: var(--mk-5) 0 0; max-width: 74ch;
+    font-size: var(--mk-text-sm); color: var(--mk-text-muted);
+  }
 
-  /* ---------- how ---------- */
-  .how { padding: 40px 0 60px; border-top: 1px solid var(--line); }
-  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
-  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; gap: 26px; } }
-  .step h3 { margin: 0 0 7px; font-size: 15.5px; font-weight: 600; }
-  .step p { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--ink-2); }
-  .step .n { display: inline-flex; align-items: center; justify-content: center;
-             width: 24px; height: 24px; border-radius: 50%; background: var(--blue-soft);
-             color: var(--blue); font: 600 12px/1 var(--mono); margin-bottom: 12px; }
+  /* ---------- how it works ---------- */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--mk-8); }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; gap: var(--mk-6); } }
+  .step h3 { margin: var(--mk-3) 0 var(--mk-2); font-size: var(--mk-text-base); font-weight: 600; }
+  .step p { margin: 0; font-size: var(--mk-text-sm); color: var(--mk-text-muted); }
+  .step .n {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: var(--mk-radius-full);
+    background: var(--mk-accent-soft); color: var(--mk-accent);
+    font-family: var(--mk-font-mono); font-size: var(--mk-text-xs); font-weight: 600;
+  }
 
   /* ---------- upload ---------- */
-  .upload { padding: 44px 0 70px; border-top: 1px solid var(--line); }
-  .upload h2 { margin: 0 0 6px; font-size: 24px; letter-spacing: -0.5px; font-weight: 640; }
-  .upload .lede { margin-bottom: 26px; font-size: 16px; }
-
-  .drop {
-    border: 1.5px dashed var(--line-2); border-radius: 12px; background: var(--soft);
-    padding: 52px 24px; text-align: center; cursor: pointer;
-    transition: border-color .15s, background .15s;
+  h2 {
+    margin: 0 0 var(--mk-2);
+    font-family: var(--mk-font-display);
+    font-size: var(--mk-text-2xl);
+    letter-spacing: var(--mk-display-track);
+    font-weight: 600;
   }
-  .drop:hover, .drop.over { border-color: var(--blue); background: var(--blue-soft); }
-  .drop b { display: block; font-size: 16px; font-weight: 580; margin-bottom: 5px; }
-  .drop span { font-size: 14px; color: var(--ink-3); }
+  .upload .lede { margin-bottom: var(--mk-6); font-size: var(--mk-text-base); }
+  .mk-drop b { display: block; font-size: var(--mk-text-base); font-weight: 560; color: var(--mk-text); }
+  .mk-drop.is-over b { color: inherit; }
 
-  .tries { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-top: 18px; }
-  .tries > span { font-size: 13.5px; color: var(--ink-3); }
-  .tries > span.break { flex-basis: 100%; margin-top: 4px; }
+  .tries { display: flex; align-items: center; gap: var(--mk-2); flex-wrap: wrap; margin-top: var(--mk-4); }
+  .tries > span { font-size: var(--mk-text-sm); color: var(--mk-text-faint); }
+  .tries > span.break { flex-basis: 100%; margin-top: var(--mk-2); }
+  .try { border-radius: var(--mk-radius-full); }
   .try.real { border-style: dashed; }
-  .try {
-    background: var(--bg); border: 1px solid var(--line-2); color: var(--ink-2);
-    border-radius: 999px; padding: 6px 13px; font: 13px/1 var(--ui); cursor: pointer;
-    transition: border-color .15s, color .15s, background .15s;
-  }
-  .try:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-soft); }
 
-  .ctx { margin-top: 22px; }
-  .ctx summary { font-size: 14px; color: var(--ink-2); cursor: pointer; }
-  .ctx-body { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
-  .fld { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--ink-2); }
-  .fld input { border: 1px solid var(--line-2); border-radius: 7px; padding: 8px 10px;
-               font: 14px/1.2 var(--ui); color: var(--ink); background: var(--bg); width: 168px; }
+  .ctx { margin-top: var(--mk-5); }
+  .ctx summary { font-size: var(--mk-text-sm); color: var(--mk-text-muted); cursor: pointer; }
+  .ctx-body { display: flex; gap: var(--mk-4); flex-wrap: wrap; margin-top: var(--mk-4); }
+  .ctx-body .mk-field { width: 172px; }
 
   /* ---------- progress ---------- */
-  .prog { margin-top: 28px; }
-  .prog-track { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
-  .prog-fill { height: 100%; width: 0; background: var(--blue); border-radius: 3px;
-               transition: width .35s cubic-bezier(.4, 0, .2, 1); }
-  .prog-label { margin-top: 11px; font-size: 13.5px; color: var(--ink-2); }
+  .prog { margin-top: var(--mk-6); }
+  .prog-label { margin: var(--mk-3) 0 0; font-size: var(--mk-text-sm); color: var(--mk-text-muted); }
 
   /* ---------- results ---------- */
-  .results { border-top: 1px solid var(--line); background: var(--soft); padding: 44px 0 80px; }
-  .call { display: flex; align-items: flex-start; gap: 16px; padding: 20px 22px;
-          border-radius: 12px; border: 1px solid var(--line); background: var(--bg); }
-  .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 8px; flex: 0 0 auto; }
-  .call h2 { margin: 0 0 4px; font-size: 20px; letter-spacing: -0.4px; font-weight: 640; }
-  .call p { margin: 0; font-size: 14.5px; color: var(--ink-2); }
-  .call .score { margin-left: auto; text-align: right; flex: 0 0 auto; }
-  .call .score b { display: block; font: 600 22px/1 var(--mono); letter-spacing: -0.5px; }
-  .call .score span { font-size: 12px; color: var(--ink-3); }
-  .r-pass .dot { background: var(--pass); }   .r-pass h2 { color: var(--pass); }
-  .r-alert .dot { background: var(--alert); } .r-alert h2 { color: var(--alert); }
-  .r-review .dot { background: var(--review); } .r-review h2 { color: var(--review); }
+  .results {
+    border-top: var(--mk-border-w) solid var(--mk-line);
+    background: var(--mk-surface-2);
+    padding: var(--mk-8) 0 var(--mk-12);
+  }
+  .call { display: flex; align-items: flex-start; gap: var(--mk-4); padding: var(--mk-5); }
+  .call .mk-dot { width: 10px; height: 10px; margin-top: 9px; color: var(--tone); }
+  .call h2 { margin: 0 0 2px; font-size: var(--mk-text-xl); color: var(--tone); }
+  .call p { margin: 0; font-size: var(--mk-text-sm); color: var(--mk-text-muted); }
+  .call .score { margin-left: auto; text-align: right; flex: none; }
+  .call .score b {
+    display: block; font-family: var(--mk-font-mono);
+    font-size: var(--mk-text-2xl); font-weight: 600; color: var(--tone);
+  }
+  .call .score span { font-size: var(--mk-text-xs); color: var(--mk-text-faint); }
 
-  .split { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-           gap: 24px; margin-top: 24px; align-items: start; }
+  .split {
+    display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: var(--mk-5); margin-top: var(--mk-5); align-items: start;
+  }
   @media (max-width: 860px) { .split { grid-template-columns: minmax(0, 1fr); } }
 
-  .card { border: 1px solid var(--line); border-radius: 12px; background: var(--bg); overflow: hidden; }
-  .card > h3 { margin: 0; padding: 15px 18px; font-size: 14px; font-weight: 600;
-               border-bottom: 1px solid var(--line); }
-  .card-body { padding: 18px; }
-
-  .views { display: flex; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--line);
-           flex-wrap: wrap; }
-  .view { background: none; border: 1px solid transparent; border-radius: 7px; color: var(--ink-2);
-          padding: 6px 11px; font: 13px/1 var(--ui); cursor: pointer; transition: .12s; }
-  .view:hover { background: var(--soft); }
-  .view[aria-selected="true"] { background: var(--blue-soft); color: var(--blue);
-                                border-color: #d3ddf8; font-weight: 550; }
-  .plate { background: var(--plate); display: flex; justify-content: center; padding: 20px; }
+  .mk-card { background: var(--mk-surface); }
+  .card-pad { padding: var(--mk-5); }
+  .card-title {
+    margin: 0; padding: var(--mk-4) var(--mk-5);
+    font-size: var(--mk-text-sm); font-weight: 600;
+    border-bottom: var(--mk-border-w) solid var(--mk-line);
+  }
+  .plate { background: var(--mk-surface-sunk); display: flex; justify-content: center; padding: var(--mk-5); }
   .plate img { max-width: 100%; max-height: 460px; display: block; }
-  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 100%; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--mk-4); width: 100%; }
   .pair figure { margin: 0; }
   .pair img { width: 100%; }
-  .pair figcaption { margin-top: 8px; font-size: 12.5px; color: #f0f1f3; }
+  .pair figcaption { margin-top: var(--mk-2); font-size: var(--mk-text-xs); color: var(--mk-text-muted); }
 
-  .find { padding: 15px 18px; border-bottom: 1px solid var(--line); }
+  /* ---------- findings ---------- */
+  .find { padding: var(--mk-4) var(--mk-5); border-bottom: var(--mk-border-w) solid var(--mk-line); }
   .find:last-child { border-bottom: 0; }
-  .find-top { display: flex; align-items: baseline; gap: 10px; }
-  .find-name { font-size: 14.5px; font-weight: 550; }
-  .find-verd { margin-left: auto; font-size: 12.5px; font-weight: 550; }
-  .find-why { margin: 6px 0 0; font-size: 13.5px; line-height: 1.55; color: var(--ink-2); }
-  .meter { height: 4px; border-radius: 2px; background: var(--line); margin-top: 9px; overflow: hidden; }
-  .meter i { display: block; height: 100%; border-radius: 2px; }
-  .f-pass .find-verd { color: var(--pass); }
-  .f-alert .find-verd { color: var(--alert); }
-  .f-review .find-verd { color: var(--review); }
-  .find.off .find-name { color: var(--ink-3); }
-  .find.off .find-verd { color: var(--ink-3); font-weight: 400; }
-  .find.off .find-why { color: var(--ink-3); }
+  .find-top { display: flex; align-items: baseline; gap: var(--mk-3); }
+  .find-name { font-size: var(--mk-text-sm); font-weight: 550; }
+  .find-top .mk-badge { margin-left: auto; }
+  .find-why { margin: var(--mk-2) 0 0; font-size: var(--mk-text-sm); color: var(--mk-text-muted); }
+  .find .mk-meter { margin-top: var(--mk-3); height: 4px; }
+  .find.off .find-name, .find.off .find-why { color: var(--mk-text-faint); }
 
-  .meta-note { margin: 20px 0 0; padding: 15px 18px; font-size: 13.5px; line-height: 1.6;
-               color: var(--ink-2); background: var(--bg); border: 1px solid var(--line);
-               border-radius: 12px; }
-  .badge { display: inline-block; font: 600 11px/1 var(--mono); letter-spacing: .6px;
-           padding: 4px 8px; border-radius: 5px; margin-bottom: 9px; }
-  .badge.recovered { background: var(--pass-soft); color: var(--pass); }
-  .badge.partial { background: var(--review-soft); color: var(--review); }
-  .badge.inferred { background: var(--alert-soft); color: var(--alert); }
+  .meta-note {
+    margin: var(--mk-5) 0 0; padding: var(--mk-4) var(--mk-5);
+    font-size: var(--mk-text-sm); color: var(--mk-text-muted);
+    background: var(--mk-surface);
+    border: var(--mk-border-w) solid var(--mk-line);
+    border-radius: var(--mk-radius);
+  }
 
-  table.reg { width: 100%; border-collapse: collapse; font: 13px/1 var(--mono); }
-  table.reg th { text-align: left; padding: 8px 10px; font-size: 11px; letter-spacing: .6px;
-                 text-transform: uppercase; color: var(--ink-3); font-weight: 500;
-                 border-bottom: 1px solid var(--line); }
-  table.reg td { padding: 8px 10px; border-bottom: 1px solid var(--line); color: var(--ink-2); }
-  table.reg tr:last-child td { border-bottom: 0; }
-
-  .err { margin-top: 20px; padding: 14px 16px; border-radius: 9px;
-         background: var(--alert-soft); color: var(--alert); font-size: 14px; }
-
-  footer { border-top: 1px solid var(--line); padding: 26px 0 44px; }
-  footer p { margin: 0; font-size: 13px; color: var(--ink-3); max-width: 74ch; line-height: 1.6; }
+  footer { border-top: var(--mk-border-w) solid var(--mk-line); padding: var(--mk-6) 0 var(--mk-10); }
+  footer p { margin: 0; font-size: var(--mk-text-sm); color: var(--mk-text-faint); max-width: 74ch; }
 </style>
 </head>
 <body>
 
 <header><div class="shell head">
   <span class="logo">Re<em>trace</em></span>
-  <nav><a href="/science">How it works, in detail</a></nav>
+  <nav><a class="mk-btn mk-btn--ghost mk-sm" href="/science">How it works, in detail</a></nav>
 </div></header>
 
 <section class="shell hero">
   <h1>Check whether a photo has been edited.</h1>
   <p class="lede">Upload an image and see what the pixels say. Retrace measures the physical
-    traces a camera leaves behind — and that editing breaks — rather than asking a model to
-    guess. <b>When the original is still recoverable from the file, it shows you that too.</b></p>
+    traces a camera leaves behind, and that editing breaks, rather than asking a model to
+    guess. <b>It needs only the image in front of it. There is nothing to compare
+    against.</b></p>
 </section>
 
-<section class="shell example">
-  <p class="eyebrow">A worked example</p>
+<section class="shell block">
+  <p class="mk-eyebrow eyebrow-row">A worked example, from one image alone</p>
   <div class="strip">
-    <div class="frame">
-      <div class="pic"><img src="/samples/real_courtyard_stale_preview.jpg"
-           alt="A photograph of a courtyard gateway with two people standing in it"></div>
+    <div class="mk-card frame">
+      <div class="pic"><img src="/samples/real_courtyard_cloned_window.jpg"
+           alt="A courtyard wall with two identical decorative windows"></div>
       <div class="cap"><b>The photo as submitted</b>
-        <span>Two people standing in a gateway. Nothing about the image looks wrong.</span></div>
+        <span>A wall with two decorative windows. Nothing about it looks wrong, and no
+          original exists to check it against.</span></div>
     </div>
-    <div class="frame">
-      <div class="pic"><img id="ex-before" alt="The same courtyard with nobody in it"></div>
-      <div class="cap"><b>The original, recovered</b>
-        <span>The file still held a preview the editor never updated. Nobody was there.</span></div>
+    <div class="mk-card frame">
+      <div class="pic"><img id="ex1-overlay" alt="The same wall with both windows outlined"></div>
+      <div class="cap"><b>What Retrace found</b>
+        <span>212 keypoint pairs shifted by exactly the same (400, -10) pixels. One window
+          was clone-stamped from the other.</span></div>
     </div>
-    <div class="frame">
-      <div class="pic"><img id="ex-heat" alt="A map showing the outline of the two added figures"></div>
-      <div class="cap"><b>What was added</b>
-        <span>The difference between the two, traced to the pixel — 6.2% of the frame.</span></div>
+    <div class="mk-card frame">
+      <div class="pic"><img id="ex1-heat" alt="A map highlighting the two duplicated windows"></div>
+      <div class="cap"><b>Where it looked</b>
+        <span>The measurement, not a difference. The image was caught disagreeing with
+          itself.</span></div>
     </div>
   </div>
+  <p class="aside">This is the ordinary case. Retrace is given one photograph and asks
+    whether it is internally consistent with having come from a single sensor in a single
+    exposure. A duplicated region is one way that fails. Pixels that were never
+    interpolated by a sensor are another.</p>
 </section>
 
-<section class="shell how">
-  <p class="eyebrow">How it works</p>
+<section class="shell block ruled">
+  <p class="mk-eyebrow eyebrow-row">And occasionally, a shortcut</p>
+  <div class="strip">
+    <div class="mk-card frame">
+      <div class="pic"><img src="/samples/real_courtyard_stale_preview.jpg"
+           alt="A photograph of a courtyard gateway with two people standing in it"></div>
+      <div class="cap"><b>A different photo, as submitted</b>
+        <span>Two people standing in a gateway.</span></div>
+    </div>
+    <div class="mk-card frame">
+      <div class="pic"><img id="ex2-before" alt="The same courtyard with nobody in it"></div>
+      <div class="cap"><b>The original, recovered</b>
+        <span>This file still held a preview the editor never regenerated. Nobody was
+          there.</span></div>
+    </div>
+    <div class="mk-card frame">
+      <div class="pic"><img id="ex2-heat" alt="A map showing the outline of the two added figures"></div>
+      <div class="cap"><b>The difference</b>
+        <span>Traced to the pixel. 6.2% of the frame.</span></div>
+    </div>
+  </div>
+  <p class="aside">When an editor rewrites the image but forgets the thumbnail buried in
+    the file, the old pixels are still there and the answer is close to conclusive. It is
+    also luck. Most files carry no usable preview, and none of the accuracy measured on
+    the benchmark comes from this path.</p>
+</section>
+
+<section class="shell block ruled">
+  <p class="mk-eyebrow eyebrow-row">How it works</p>
   <div class="steps">
     <div class="step"><span class="n">1</span>
       <h3>Read the file, not the picture</h3>
@@ -236,22 +262,23 @@
         authentic it looks.</p></div>
     <div class="step"><span class="n">2</span>
       <h3>Check the compression history</h3>
-      <p>JPEG compresses on a fixed 8×8 grid. Paste in a region from another photo and it
+      <p>JPEG compresses on a fixed 8&times;8 grid. Paste in a region from another photo and it
         brings its own grid, misaligned with the frame around it.</p></div>
     <div class="step"><span class="n">3</span>
       <h3>Check the sensor physics</h3>
-      <p>Every sensor leaves a noise signature and every lens bends colour predictably.
-        Edited regions break patterns no editor thinks to preserve.</p></div>
+      <p>A sensor captures one colour per pixel and interpolates the rest, leaving a
+        structure no editor thinks to preserve. Pasted or painted pixels were never
+        interpolated, so they do not carry it.</p></div>
   </div>
 </section>
 
-<section class="shell upload">
+<section class="shell block ruled upload">
   <h2>Check your own image</h2>
   <p class="lede">Nothing is sent anywhere else. The analysis runs on this machine.</p>
 
-  <div class="drop" id="drop" role="button" tabindex="0" aria-label="Choose an image to check">
+  <div class="mk-drop" id="drop" role="button" tabindex="0" aria-label="Choose an image to check">
     <b>Drop an image here, or click to choose a file</b>
-    <span>JPEG, PNG, WebP, TIFF, HEIC or BMP</span>
+    <span class="mk-hint">JPEG, PNG, WebP, TIFF, HEIC or BMP</span>
     <input type="file" id="file" accept="image/*,.heic,.heif,.tif,.tiff" hidden>
   </div>
 
@@ -260,15 +287,19 @@
   <details class="ctx">
     <summary>Add claim details (optional)</summary>
     <div class="ctx-body">
-      <label class="fld">Claim reference<input id="claim_id" value="CLM-0001"></label>
-      <label class="fld">Claimant reference<input id="claimant_id" value="C-0001"></label>
-      <label class="fld">Policy start date<input id="policy_inception" type="date"></label>
-      <label class="fld">Date of loss<input id="loss_date" type="date"></label>
+      <label class="mk-field"><span class="mk-label">Claim reference</span>
+        <input class="mk-input mk-sm" id="claim_id" value="CLM-0001"></label>
+      <label class="mk-field"><span class="mk-label">Claimant reference</span>
+        <input class="mk-input mk-sm" id="claimant_id" value="C-0001"></label>
+      <label class="mk-field"><span class="mk-label">Policy start date</span>
+        <input class="mk-input mk-sm" id="policy_inception" type="date"></label>
+      <label class="mk-field"><span class="mk-label">Date of loss</span>
+        <input class="mk-input mk-sm" id="loss_date" type="date"></label>
     </div>
   </details>
 
   <div class="prog" id="prog" hidden>
-    <div class="prog-track"><div class="prog-fill" id="progFill"></div></div>
+    <div class="mk-meter"><div class="mk-meter__fill" id="progFill" style="width:0"></div></div>
     <p class="prog-label" id="progLabel"></p>
   </div>
 
@@ -292,13 +323,21 @@ const NAME = {
   'compression.block_grid': 'Compression grid',
   'compression.ela': 'Compression error',
   'sensor.noise_inconsistency': 'Sensor noise',
+  'sensor.noiseprint_structure': 'Camera fingerprint',
+  'sensor.noiseprint_anomaly': 'Fingerprint strength',
+  'geometric.copy_move': 'Duplicated regions',
+  'geometric.sharpness_inconsistency': 'Focus consistency',
+  'sensor.synthetic_region': 'Rendered content',
 };
+
+/* Tone classes are mk-ui's semantic trio, so the page and the collection cannot
+   drift apart: changing the accent upstream changes a cleared verdict here. */
 const CALL = {
-  auto_clear: ['r-pass', 'No signs of editing',
+  auto_clear: ['t-pass', 'No signs of editing',
     'Nothing measured on this image indicates a change.'],
-  flag: ['r-alert', 'This image has been edited',
+  flag: ['t-alert', 'This image has been edited',
     'One or more measurements are inconsistent with an unedited photograph.'],
-  route_to_human: ['r-review', 'Needs a closer look',
+  route_to_human: ['t-review', 'Needs a closer look',
     'The measurements are inconclusive. A person should review this one.'],
 };
 const STAGES = ['Reading the file', 'Checking compression history', 'Measuring sensor noise',
@@ -309,9 +348,9 @@ let timer = null;
 
 drop.onclick = () => fileInput.click();
 drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } };
-drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
-drop.ondragleave = () => drop.classList.remove('over');
-drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over');
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('is-over'); };
+drop.ondragleave = () => drop.classList.remove('is-over');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('is-over');
                      if (e.dataTransfer.files[0]) send(e.dataTransfer.files[0]); };
 fileInput.onchange = () => fileInput.files[0] && send(fileInput.files[0]);
 
@@ -326,29 +365,42 @@ fetch('/api/samples').then(r => r.json()).then(list => {
     box.appendChild(tag);
     for (const s of items) {
       const b = document.createElement('button');
-      b.className = 'try' + (cls ? ' ' + cls : '');
+      b.className = 'mk-btn mk-btn--secondary mk-sm try' + (cls ? ' ' + cls : '');
       b.textContent = s.name.replace(/^real_/, '').replace(/\.jpg$/, '').replace(/_/g, ' ');
       b.title = s.blurb;
       b.onclick = () => send(s.name);
       box.appendChild(b);
     }
   };
-  add('Constructed examples, one per check:', list.filter(s => s.group !== 'real'), '');
-  add('Real photographs, edited by hand:', list.filter(s => s.group === 'real'), 'real');
+  add('Caught from the image alone, no original needed:',
+      list.filter(s => s.group === 'single'), '');
+  add('Constructed examples, one per check:',
+      list.filter(s => s.group === 'synthetic'), '');
+  add('Real photographs, edited by hand:',
+      list.filter(s => s.group === 'real'), 'real');
 }).catch(() => {});
 
-/* The worked example shows real output rather than a mockup of it. */
-(function loadExample() {
+/* Both worked examples show real output rather than a mockup of it. The panels are
+   whatever the pipeline actually returned for those files a moment ago. */
+function loadExample(sample, panels) {
   const fd = new FormData();
-  fd.append('sample', 'real_courtyard_stale_preview.jpg');
-  fetch('/api/analyse', { method: 'POST', body: fd })
+  fd.append('sample', sample);
+  return fetch('/api/analyse', { method: 'POST', body: fd })
     .then(r => r.json())
     .then(d => {
-      if (d.images && d.images.before) $('#ex-before').src = d.images.before;
-      if (d.images && d.images.changed) $('#ex-heat').src = d.images.changed;
+      for (const [key, sel] of Object.entries(panels)) {
+        if (d.images && d.images[key]) $(sel).src = d.images[key];
+      }
     })
     .catch(() => {});
-})();
+}
+
+/* Sequential rather than parallel: each analysis is CPU-bound, and firing both at
+   once made the first panel noticeably slower to appear. */
+loadExample('real_courtyard_cloned_window.jpg',
+            { overlay: '#ex1-overlay', heatmap: '#ex1-heat' })
+  .then(() => loadExample('real_courtyard_stale_preview.jpg',
+                          { before: '#ex2-before', changed: '#ex2-heat' }));
 
 /* Eases toward 90% and completes on response. The stage names are the real pipeline
    order; the timing is an estimate, since analysis is a single request. */
@@ -358,13 +410,13 @@ function startProgress() {
   $('#err').innerHTML = '';
   let pct = 0, stage = 0;
   fill.style.width = '0%';
-  label.textContent = STAGES[0] + '…';
+  label.textContent = STAGES[0] + '...';
   clearInterval(timer);
   timer = setInterval(() => {
     pct = Math.min(90, pct + (90 - pct) * 0.18 + 2);
     fill.style.width = pct + '%';
     const next = Math.min(STAGES.length - 1, Math.floor(pct / 20));
-    if (next !== stage) { stage = next; label.textContent = STAGES[stage] + '…'; }
+    if (next !== stage) { stage = next; label.textContent = STAGES[stage] + '...'; }
   }, 220);
 }
 
@@ -392,7 +444,8 @@ async function send(input) {
     results.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
     endProgress(false);
-    $('#err').innerHTML = `<div class="err">Could not check that file — ${esc(e.message)}</div>`;
+    $('#err').innerHTML =
+      `<div class="mk-alert mk-alert--danger" style="margin-top:var(--mk-5)">Could not check that file. ${esc(e.message)}</div>`;
   }
 }
 
@@ -401,25 +454,24 @@ function finding(e) {
   if (!e.applicable) {
     return `<div class="find off"><div class="find-top">
         <span class="find-name">${label}</span>
-        <span class="find-verd">Not applicable</span></div>
+        <span class="mk-badge">Not applicable</span></div>
       <p class="find-why">${esc(e.explanation)}</p></div>`;
   }
-  const [cls, verdict, colour] = e.score > 0.6
-    ? ['f-alert', 'Inconsistent', 'var(--alert)']
-    : e.score < 0.4
-      ? ['f-pass', 'Consistent', 'var(--pass)']
-      : ['f-review', 'Unclear', 'var(--review)'];
+  const [tone, verdict] = e.score > 0.6
+    ? ['danger', 'Inconsistent']
+    : e.score < 0.4 ? ['ok', 'Consistent'] : ['warn', 'Unclear'];
   const strength = Math.round(Math.abs(e.score - 0.5) * 2 * e.confidence * 100);
-  return `<div class="find ${cls}"><div class="find-top">
+  return `<div class="find"><div class="find-top">
       <span class="find-name">${label}</span>
-      <span class="find-verd">${verdict}</span></div>
+      <span class="mk-badge mk-badge--${tone}">${verdict}</span></div>
     <p class="find-why">${esc(e.explanation)}</p>
-    <div class="meter"><i style="width:${Math.max(strength, 3)}%;background:${colour}"></i></div></div>`;
+    <div class="mk-meter mk-meter--${tone}">
+      <div class="mk-meter__fill" style="width:${Math.max(strength, 3)}%"></div></div></div>`;
 }
 
 function render(d) {
   const v = d.verdict, im = d.images || {}, rec = d.recovery;
-  const [cls, title, sub] = CALL[v.decision];
+  const [tone, title, sub] = CALL[v.decision];
   const applied = d.evidence.filter(e => e.applicable);
 
   const views = [['original', 'Your image']];
@@ -430,56 +482,59 @@ function render(d) {
   const plates = views.map(([k], i) => {
     const body = k === 'pair'
       ? `<div class="pair">
-           <figure><img src="${im.before}" alt="Before"><figcaption>Before — recovered from the file</figcaption></figure>
-           <figure><img src="${im.original}" alt="After"><figcaption>After — as submitted</figcaption></figure></div>`
+           <figure><img src="${im.before}" alt="Before"><figcaption>Before, recovered from the file</figcaption></figure>
+           <figure><img src="${im.original}" alt="After"><figcaption>After, as submitted</figcaption></figure></div>`
       : `<img src="${im[k]}" alt="">`;
     return `<div class="plate" data-view="${k}"${i ? ' hidden' : ''}>${body}</div>`;
   }).join('');
 
+  const fidelityTone = rec && rec.is_evidence ? 'ok' : 'danger';
+
   out.innerHTML = `
-    <div class="call ${cls}">
-      <span class="dot"></span>
+    <div class="mk-card call ${tone}">
+      <span class="mk-dot"></span>
       <div><h2>${title}</h2><p>${sub}</p></div>
       <div class="score"><b>${Math.round(v.probability * 100)}%</b><span>likelihood of editing</span></div>
     </div>
 
     <div class="split">
-      <div class="card">
-        <div class="views" role="tablist">${views.map(([k, l], i) =>
-          `<button class="view" role="tab" data-view="${k}" aria-selected="${i === 0}">${l}</button>`).join('')}</div>
+      <div class="mk-card">
+        <div class="mk-tabs" role="tablist">${views.map(([k, l], i) =>
+          `<button class="mk-tab" role="tab" data-view="${k}" aria-selected="${i === 0}">${l}</button>`).join('')}</div>
         ${plates}
-        ${(d.regions || []).length ? `<div class="card-body"><table class="reg">
+        ${(d.regions || []).length ? `<div class="card-pad"><table class="mk-table">
             <tr><th>Region</th><th>Share of image</th></tr>
             ${d.regions.slice(0, 5).map(x => `<tr>
-              <td>(${x.bbox[0]}, ${x.bbox[1]}) to (${x.bbox[2]}, ${x.bbox[3]})</td>
-              <td>${(x.area_fraction * 100).toFixed(2)}%</td></tr>`).join('')}
+              <td class="mk-mono">(${x.bbox[0]}, ${x.bbox[1]}) to (${x.bbox[2]}, ${x.bbox[3]})</td>
+              <td class="mk-mono">${(x.area_fraction * 100).toFixed(2)}%</td></tr>`).join('')}
           </table></div>` : ''}
       </div>
 
       <div>
-        <div class="card">
-          <h3>What we checked — ${applied.length} of ${d.evidence.length} measurements applied</h3>
+        <div class="mk-card">
+          <h3 class="card-title">What we checked. ${applied.length} of ${d.evidence.length} measurements applied</h3>
           ${d.evidence.map(finding).join('')}
         </div>
-        ${rec ? `<div class="card" style="margin-top:20px">
-          <h3>The original image</h3>
-          <div class="card-body">
-            <span class="badge ${rec.fidelity}">${rec.fidelity}</span>
-            <p style="margin:0;font-size:13.5px;line-height:1.6;color:var(--ink-2)">${
+        ${rec ? `<div class="mk-card" style="margin-top:var(--mk-5)">
+          <h3 class="card-title">The original image</h3>
+          <div class="card-pad">
+            <span class="mk-badge mk-badge--${fidelityTone}">${esc(rec.fidelity)}</span>
+            <p class="find-why">${
               rec.is_evidence
                 ? 'These are real pixels recovered from inside the file, not a reconstruction.'
                 : 'This is a synthesised guess, not evidence.'} ${esc(rec.caveat)}</p>
           </div></div>` : ''}
-        <p class="meta-note">${esc(d.filename)} · ${d.size[0]}×${d.size[1]} · ${esc(d.container.actual)}${
+        <p class="meta-note"><span class="mk-mono">${esc(d.filename)}</span> &middot;
+          ${d.size[0]}&times;${d.size[1]} &middot; ${esc(d.container.actual)}${
           d.container.mismatch
-            ? ` — the file is named .${esc(d.container.claimed)} but is not that format`
+            ? `. The file is named .${esc(d.container.claimed)} but is not that format.`
             : ''}</p>
       </div>
     </div>`;
 
   results.hidden = false;
-  out.querySelectorAll('.view').forEach(t => t.onclick = () => {
-    out.querySelectorAll('.view').forEach(x => x.setAttribute('aria-selected', x === t));
+  out.querySelectorAll('.mk-tab').forEach(t => t.onclick = () => {
+    out.querySelectorAll('.mk-tab').forEach(x => x.setAttribute('aria-selected', x === t));
     out.querySelectorAll('.plate').forEach(p => p.hidden = p.dataset.view !== t.dataset.view);
   });
 }
