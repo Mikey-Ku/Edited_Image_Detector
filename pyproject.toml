@@ -21,7 +21,17 @@ dependencies = [
 ui = ["fastapi>=0.110", "uvicorn[standard]>=0.29", "python-multipart>=0.0.9"]
 # piexif is test-only: it writes EXIF thumbnails, which is how we build a
 # realistic "editor forgot to regenerate the preview" fixture.
-dev = ["pytest>=8.0", "ruff>=0.4", "piexif>=1.1"]
+# httpx2 backs starlette's TestClient, which is how the API is exercised in
+# tests/test_api.py. Those tests skip themselves without the `ui` extra.
+dev = ["pytest>=8.0", "ruff>=0.4", "piexif>=1.1", "httpx2>=0.1"]
+# The two fingerprint detectors. Optional because torch is a large dependency and
+# the metadata, compression, geometric and context tiers do not need it -- but
+# optional is not the same as unimportant: these two are the strongest detectors in
+# the set, and without them `sensor.noiseprint_structure` and
+# `sensor.noiseprint_anomaly` report "not applicable" and the pipeline scores well
+# below the headline AUC. Installing without this extra is a supported
+# configuration; expecting the published numbers from it is not.
+learned = ["torch>=2.0"]
 
 [project.scripts]
 groundtruth = "groundtruth.api.cli:main"
