@@ -274,37 +274,37 @@
 
 <section class="shell block">
   <p class="mk-eyebrow eyebrow-row">Example 1. Something was copied inside the photo</p>
-  <p class="intro">The most common way to fake a photo is to <b>copy part of it over
-    something else</b>: paint clean roof tiles over the hail damage, clone a patch of wall
-    over a crack. Retrace catches this by finding two areas of one photo that are the same
-    area twice.</p>
+  <p class="intro">The most common way to inflate a claim is to <b>copy part of the photo over
+    something else</b>: extend the damage onto a panel that was never hit, or paint clean
+    surface over a scratch. Retrace catches this by finding two areas of one photo that
+    are the same area twice.</p>
 
   <div class="quad">
     <div class="mk-card frame">
-      <div class="pic"><img src="/samples/real_courtyard_cloned_window.jpg"
-           alt="A courtyard wall with two decorative windows"></div>
+      <div class="pic"><img src="/samples/claim_car_damage_extended.jpg"
+           alt="A damaged car door, photographed for an insurance claim"></div>
       <div class="cap"><b>1. What was handed in</b>
-        <span>A wall with two decorative windows. Nothing looks wrong, and you have no
-          original to check it against. Neither does Retrace.</span></div>
+        <span>A car submitted with a claim. The front and rear doors are both crumpled.
+          You have no original to check it against, and neither does Retrace.</span></div>
     </div>
     <div class="mk-card frame">
-      <div class="pic"><img id="ex1-overlay" alt="The same wall, both windows highlighted"></div>
+      <div class="pic"><img id="ex1-overlay" alt="The same car, both damaged areas highlighted"></div>
       <div class="cap"><b>2. What Retrace flagged</b>
-        <span>It marked <b>both</b> windows, saying they are the same object appearing
-          twice, 400 pixels apart. That is the claim. The next panel is the proof.</span></div>
+        <span>It marked <b>two</b> areas of bodywork, saying they are the same damage
+          appearing twice, 750 pixels apart. That is the claim. The next panel is the proof.</span></div>
     </div>
     <div class="mk-card frame">
       <div class="pic light"><img id="ex1-proof"
-           alt="The two windows cropped and placed side by side, appearing identical"></div>
+           alt="The two damaged areas cropped and placed side by side, appearing identical"></div>
       <div class="cap"><b>3. The proof, side by side</b>
-        <span>The two windows, cut out and zoomed. Every chip and shadow matches, because
-          one <em>is</em> the other. <b id="ex1-proof-num">Measured, they differ 73&times;
-          less than two genuinely different parts of the same wall.</b>
-          Real windows are never identical. A camera cannot photograph the same object
+        <span>The two areas, cut out and zoomed. Every crease and highlight matches,
+          because one <em>is</em> the other. <b id="ex1-proof-num">Measured, they differ 73&times;
+          less than two genuinely different parts of the same photograph.</b>
+          Two real dents are never identical. A camera cannot photograph the same damage
           twice in one frame.</span></div>
     </div>
     <div class="mk-card frame">
-      <div class="pic"><img id="ex1-heat" alt="A black image with the two window areas glowing"></div>
+      <div class="pic"><img id="ex1-heat" alt="A black image with the two duplicated areas glowing"></div>
       <div class="cap"><b>4. The machine's own view</b>
         <span>How suspicious each part of the photo is. <b>Black is fine, orange and white
           are suspicious.</b> Two bright patches, because a copy always leaves two marks:
@@ -315,8 +315,8 @@
   <details class="reveal">
     <summary>Was it actually right? Show me the real photo</summary>
     <div class="reveal-body">
-      <img src="/samples/real_courtyard_original.jpg" alt="The same wall with only one window">
-      <p><b>The genuine photograph has one window.</b> The right-hand one was pasted in.
+      <img src="/samples/claim_car_original.jpg" alt="The same car with only the front door damaged">
+      <p><b>In the genuine photograph only the front door is crumpled.</b> The rear panel damage was pasted in.
         <b>Retrace never saw this image</b>, it worked entirely from the edited one. This
         is here so you can mark its homework rather than take our word for it.</p>
     </div>
@@ -333,22 +333,22 @@
 
   <div class="strip">
     <div class="mk-card frame">
-      <div class="pic"><img src="/samples/real_rooftops_stale_preview.jpg"
-           alt="Two costumed people in front of Paris rooftops"></div>
+      <div class="pic"><img src="/samples/claim_wall_crack_duplicated.jpg"
+           alt="A cracked brick wall photographed for a subsidence claim"></div>
       <div class="cap"><b>1. What was handed in</b>
-        <span>Two people in costume on a bridge, with rooftops behind them.</span></div>
+        <span>A subsidence claim. The crack runs the full height of the corner.</span></div>
     </div>
     <div class="mk-card frame">
-      <div class="pic"><img id="ex2-before" alt="The same rooftops with nobody in front"></div>
+      <div class="pic"><img id="ex2-before" alt="The same wall with a shorter crack"></div>
       <div class="cap"><b>2. The thumbnail hidden in the file</b>
-        <span>Pulled straight out of the same file. <b>Nobody is there.</b> These are real
-          pixels from before the edit, not a guess or a reconstruction.</span></div>
+        <span>Pulled straight out of the same file. <b>The crack is half the length.</b>
+          These are real pixels from before the edit, not a guess or a reconstruction.</span></div>
     </div>
     <div class="mk-card frame">
-      <div class="pic"><img id="ex2-heat" alt="A map showing the outlines of the two added people"></div>
+      <div class="pic"><img id="ex2-heat" alt="A map showing the duplicated section of crack"></div>
       <div class="cap"><b>3. What changed between them</b>
         <span>The two versions compared. <b>Same colour code: black is unchanged, bright is
-          changed.</b> The two figures light up, 10.4% of the picture.</span></div>
+          changed.</b> The duplicated section lights up, 3.1% of the picture.</span></div>
     </div>
   </div>
 
@@ -476,7 +476,7 @@ function loadExample(sample, panels) {
 
 /* Sequential rather than parallel: each analysis is CPU-bound, and firing both at
    once made the first panel noticeably slower to appear. */
-loadExample('real_courtyard_cloned_window.jpg',
+loadExample('claim_car_damage_extended.jpg',
             { overlay: '#ex1-overlay', heatmap: '#ex1-heat', proof: '#ex1-proof' })
   .then(d => {
     /* The multiple in the caption is measured on this run rather than typed into the
@@ -485,9 +485,9 @@ loadExample('real_courtyard_cloned_window.jpg',
     if (p && p.ratio) {
       $('#ex1-proof-num').textContent =
         `Measured, they differ ${p.ratio}× less than two genuinely different parts ` +
-        `of the same wall.`;
+        `of the same photograph.`;
     }
-    return loadExample('real_rooftops_stale_preview.jpg',
+    return loadExample('claim_wall_crack_duplicated.jpg',
                        { before: '#ex2-before', changed: '#ex2-heat' });
   });
 

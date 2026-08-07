@@ -171,3 +171,38 @@ def test_stylesheet_is_served(client):
     r = client.get("/static/mk-ui.css")
     assert r.status_code == 200
     assert "--mk-accent" in r.text
+
+
+# --------------------------------------------------------------------------
+# The proof panel
+# --------------------------------------------------------------------------
+
+
+def test_proof_panel_is_withheld_when_the_evidence_is_weak(client):
+    """The panel exists so a person can verify a finding by looking. Two crops only
+    marginally more alike than two unrelated patches demonstrate nothing, and a
+    number printed beside them reads as proof regardless. Showing nothing is the
+    honest output.
+
+    This regressed once already: picking the two hottest heatmap blobs and hoping
+    they were the matched pair scored 1.3x on a car panel, which would have shipped.
+    """
+    from groundtruth.api.server import _SAMPLES
+
+    for name in ("claim_car_original.jpg", "real_courtyard_original.jpg"):
+        if not (_SAMPLES / name).is_file():
+            continue
+        body = client.post("/api/analyse", data={"sample": name}).json()
+        assert body.get("proof") is None, f"{name} produced a proof panel with no edit"
+
+
+def test_proof_panel_reports_a_ratio_worth_believing(client):
+    from groundtruth.api.server import _SAMPLES
+
+    name = "claim_car_damage_extended.jpg"
+    if not (_SAMPLES / name).is_file():
+        pytest.skip("sample not present")
+    proof = client.post("/api/analyse", data={"sample": name}).json().get("proof")
+    assert proof is not None, "a staged clone should produce a proof panel"
+    assert proof["ratio"] >= 3.0
+    assert proof["pair_difference"] < proof["control_difference"]

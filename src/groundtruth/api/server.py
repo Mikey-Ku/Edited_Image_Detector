@@ -51,10 +51,17 @@ _SAMPLES = Path(__file__).resolve().parents[3] / "samples"
 # Retrace currently cannot separate them from their own unedited originals, and
 # hiding that behind a flattering demo would misrepresent the tool.
 _SAMPLE_INFO = {
-    "real_courtyard_cloned_window.jpg": (
-        ("Real photograph with one decorative window clone-stamped along the wall. "
-         "No embedded preview, so nothing is compared against an original: the image "
-         "is caught disagreeing with itself."), "single"),
+    "claim_car_damage_extended.jpg": (
+        ("A real damaged car, with a crumpled section of the front door cloned onto "
+         "a rear panel that was never hit. No original attached: the image is caught "
+         "disagreeing with itself."), "single"),
+    "claim_wall_crack_duplicated.jpg": (
+        ("A real subsidence crack, partly duplicated so the damage looks worse. The "
+         "file also still carries a thumbnail of the pre-edit original."), "single"),
+    "claim_car_original.jpg": (
+        "The untouched car photograph, for checking the system's work.", "real"),
+    "claim_wall_original.jpg": (
+        "The untouched wall photograph, for checking the system's work.", "real"),
     "edited_stale_preview.jpg": (
         ("Synthetic. The editor rewrote the image but left the embedded preview, "
          "so the original is recoverable."), "synthetic"),
@@ -62,9 +69,12 @@ _SAMPLE_INFO = {
         "Synthetic. A region spliced in carrying a different sensor-noise level.", "synthetic"),
     "clean_uniform_noise.jpg": (
         "Synthetic. Unedited control for the noise splice.", "synthetic"),
+    "real_courtyard_cloned_window.jpg": (
+        "A decorative window clone-stamped along a wall. Caught from the image alone.",
+        "single"),
     "real_courtyard_edited.jpg": (
-        ("Real photograph (Nikon D7000), two figures composited in by hand in GIMP. "
-         "Retrace does not currently detect this."), "real"),
+        ("Real photograph, two figures composited in by hand in GIMP. "
+         "Retrace does not detect this one."), "real"),
     "real_courtyard_original.jpg": (
         "The unedited original of the courtyard photograph.", "real"),
     "real_courtyard_stale_preview.jpg": (
@@ -188,7 +198,7 @@ def _analyse_sample(key: tuple, path: Path, display_name: str, context) -> dict:
 
 
 # The two samples the landing page analyses before it can render anything.
-_WARM_ON_START = ("real_courtyard_cloned_window.jpg", "real_rooftops_stale_preview.jpg")
+_WARM_ON_START = ("claim_car_damage_extended.jpg", "claim_wall_crack_duplicated.jpg")
 
 
 def _warm_examples() -> None:
@@ -339,10 +349,20 @@ def _build_payload(
         images["heatmap"] = _data_uri(colourise(verdict.heatmap))
         regions = peak_regions(verdict.heatmap, threshold=0.5)
 
-        # When two regions were flagged, the finding can be shown rather than
-        # asserted: crop both and put them side by side. Absent for most images,
+        # When a region was flagged, the finding can be shown rather than asserted:
+        # crop it and its partner and put them side by side. Absent for most images,
         # which is why the UI treats it as an extra panel and not a fixture.
-        made = duplicate_pair(base, regions)
+        #
+        # The partner is located by copy-move's own measured displacement rather than
+        # by guessing from the heatmap, so the pair shown is the pair the detector
+        # actually matched.
+        cm = next((e for e in verdict.evidence
+                   if e.detector_id == "geometric.copy_move" and e.applicable), None)
+        disp = (cm.details or {}).get("displacement_px") if cm else None
+        made = duplicate_pair(
+            base, regions,
+            displacement=tuple(disp) if disp and len(disp) == 2 else None,
+        )
         if made is not None:
             pair_img, proof = made
             images["proof"] = _data_uri(pair_img)

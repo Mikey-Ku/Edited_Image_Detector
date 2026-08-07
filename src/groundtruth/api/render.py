@@ -52,49 +52,106 @@ def overlay(base: np.ndarray, heat: np.ndarray, alpha: float = 0.55) -> np.ndarr
 
 
 def duplicate_pair(
-    base: np.ndarray, regions: list[dict], zoom: int = 2, gap: int = 24
+    base: np.ndarray,
+    regions: list[dict],
+    displacement: tuple[float, float] | None = None,
+    zoom: int = 2,
+    gap: int = 24,
 ) -> tuple[np.ndarray, dict] | None:
-    """Crop the two flagged regions and set them side by side, with the numbers.
+    """Crop the two matched regions and set them side by side, with the numbers.
 
     Copy-move states its finding in units nobody outside the code can check: "212
     keypoint pairs share a displacement of (400, -10) px". True, and useless as
     evidence to a person. The same finding shown as two crops beside each other is
     checkable by looking, which is what evidence is supposed to be.
 
+    **The pair comes from the measured displacement, not from the heatmap.** Picking
+    the two hottest regions and hoping they are the matched pair works only when the
+    heatmap has exactly two clean blobs. On a car panel copy-move lights up a dozen
+    scattered fragments, and the top two were arbitrary neighbours: they scored a
+    ratio of 1.3, which reads as evidence and is not. The detector already knows the
+    offset, so the honest crop is one region and that same region shifted by it.
+
     The comparison against an unrelated patch of the same image matters as much as
     the pair itself. "These two look similar" is worth nothing without knowing what
     similar means for this photograph: a wall of repeating tiles would score well by
     accident. The control makes the ratio interpretable.
 
-    Returns None when there are not two regions to compare, which is most images.
+    Returns None when there is nothing trustworthy to show, which is most images.
     """
-    if len(regions) < 2:
+    if not regions:
         return None
     h, w = base.shape[:2]
 
-    def crop(bbox: list[int]) -> np.ndarray | None:
-        x0, y0, x1, y1 = (int(v) for v in bbox)
-        x0, y0 = max(x0, 0), max(y0, 0)
-        x1, y1 = min(x1, w), min(y1, h)
-        if x1 - x0 < 8 or y1 - y0 < 8:
+    def crop_box(x0, y0, x1, y1) -> np.ndarray | None:
+        x0, y0 = max(int(x0), 0), max(int(y0), 0)
+        x1, y1 = min(int(x1), w), min(int(y1), h)
+        if x1 - x0 < 24 or y1 - y0 < 24:
             return None
         return base[y0:y1, x0:x1]
 
-    top = sorted(regions, key=lambda r: -r.get("peak", 0))[:2]
-    a, b = crop(top[0]["bbox"]), crop(top[1]["bbox"])
-    if a is None or b is None:
-        return None
+    if displacement is not None:
+        dx, dy = (int(round(v)) for v in displacement)
+        if abs(dx) < 8 and abs(dy) < 8:
+            return None
+        # Largest flagged region, and the same window shifted by the offset. One of
+        # the two is the source and the other the paste; which is which is not
+        # recoverable, and does not matter for showing they are the same pixels.
+        r = max(regions, key=lambda r: r.get("area_px", 0))
+        x0, y0, x1, y1 = (int(v) for v in r["bbox"])
+        a = crop_box(x0, y0, x1, y1)
+        b = crop_box(x0 + dx, y0 + dy, x1 + dx, y1 + dy)
+        if a is None or b is None:
+            # The partner falls outside the frame, so try the other direction.
+            a = crop_box(x0 - dx, y0 - dy, x1 - dx, y1 - dy)
+            b = crop_box(x0, y0, x1, y1)
+            if a is None or b is None:
+                return None
+    else:
+        if len(regions) < 2:
+            return None
+        top = sorted(regions, key=lambda r: -r.get("peak", 0))[:2]
+        a = crop_box(*top[0]["bbox"])
+        b = crop_box(*top[1]["bbox"])
+        if a is None or b is None:
+            return None
 
     # Compare on the overlap, since the two boxes are rarely the exact same size.
     ch, cw = min(a.shape[0], b.shape[0]), min(a.shape[1], b.shape[1])
     a, b = a[:ch, :cw], b[:ch, :cw]
+
+    # Refine the alignment before measuring. The reported displacement is a median
+    # over matched keypoints, so it is right to within a few pixels, and the crop
+    # boundary comes from a heatmap blob rather than from the paste edge. A couple of
+    # pixels of misalignment on a textured surface inflates the difference enormously:
+    # on the wall it read 42.6 against a control of 50.8, a ratio of 1.2, which would
+    # have been published as proof of nothing.
+    if displacement is not None and min(ch, cw) > 48:
+        pad = 6
+        inner_a = a[pad:ch - pad, pad:cw - pad].astype(np.float32)
+        best, best_off = None, (0, 0)
+        for oy in range(-pad, pad + 1):
+            for ox in range(-pad, pad + 1):
+                shifted = b[pad + oy:ch - pad + oy, pad + ox:cw - pad + ox]
+                if shifted.shape != inner_a.shape:
+                    continue
+                d = float(np.abs(inner_a - shifted.astype(np.float32)).mean())
+                if best is None or d < best:
+                    best, best_off = d, (ox, oy)
+        if best is not None:
+            ox, oy = best_off
+            a = a[pad:ch - pad, pad:cw - pad]
+            b = b[pad + oy:ch - pad + oy, pad + ox:cw - pad + ox]
+            ch, cw = a.shape[0], a.shape[1]
+
     pair_diff = float(np.abs(a.astype(np.float32) - b.astype(np.float32)).mean())
 
     # The control: a patch the same size taken from elsewhere in the frame, as far
-    # from both regions as the image allows.
-    x0 = int(top[0]["bbox"][0])
-    cx = 0 if x0 > w // 2 else max(w - cw, 0)
-    cy = min(int(top[0]["bbox"][1]), max(h - ch, 0))
+    # from the flagged region as the image allows. Anchored on the largest region
+    # rather than on whichever branch produced the pair, so both paths agree.
+    anchor = max(regions, key=lambda r: r.get("area_px", 0))["bbox"]
+    cx = 0 if int(anchor[0]) > w // 2 else max(w - cw, 0)
+    cy = min(int(anchor[1]), max(h - ch, 0))
     control = base[cy:cy + ch, cx:cx + cw]
     control_diff = (
         float(np.abs(a.astype(np.float32) - control.astype(np.float32)).mean())
@@ -108,10 +165,19 @@ def duplicate_pair(
     canvas.paste(left, (0, 0))
     canvas.paste(right, (cw * zoom + gap, 0))
 
+    ratio = round(control_diff / pair_diff, 1) if pair_diff > 0.01 else None
+
+    # Refuse to publish weak evidence. This panel exists to let a person verify the
+    # finding by looking, and two crops that are only marginally more alike than two
+    # unrelated patches demonstrate nothing. Below 3x the honest move is to show no
+    # proof panel at all rather than a number that reads as one.
+    if ratio is None or ratio < 3.0:
+        return None
+
     return np.asarray(canvas), {
         "pair_difference": round(pair_diff, 2),
         "control_difference": round(control_diff, 2),
-        "ratio": round(control_diff / pair_diff, 1) if pair_diff > 0.01 else None,
+        "ratio": ratio,
     }
 
 
