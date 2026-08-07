@@ -179,7 +179,12 @@ class CopyMoveDetector(Detector):
             for x, y in (pts[i], pts[j]):
                 heat[(xx - x) ** 2 + (yy - y) ** 2 <= _PAINT**2] = 1.0
 
-        details["displacement_px"] = list(offset)
+        # Plain floats, not the numpy scalars `offset` arrives as. `details` is
+        # published straight out of the JSON API, and a numpy float32 in here took
+        # the whole /api/analyse response down with a 500 -- but only on images
+        # where copy-move actually found something, which is to say only on the
+        # images worth demonstrating.
+        details["displacement_px"] = [float(v) for v in offset]
         details["supporting_pairs"] = len(members)
 
         return Evidence(

@@ -39,6 +39,10 @@ _SAMPLES = Path(__file__).resolve().parents[3] / "samples"
 # Retrace currently cannot separate them from their own unedited originals, and
 # hiding that behind a flattering demo would misrepresent the tool.
 _SAMPLE_INFO = {
+    "real_courtyard_cloned_window.jpg": (
+        ("Real photograph with one decorative window clone-stamped along the wall. "
+         "No embedded preview, so nothing is compared against an original: the image "
+         "is caught disagreeing with itself."), "single"),
     "edited_stale_preview.jpg": (
         ("Synthetic. The editor rewrote the image but left the embedded preview, "
          "so the original is recoverable."), "synthetic"),
@@ -92,8 +96,37 @@ def _parse_date(value: str | None) -> date | None:
         return None
 
 
+def _jsonable(value):
+    """Coerce numpy scalars and arrays into plain Python for the JSON response.
+
+    `Evidence.details` is a free-form dict every detector fills in however suits it,
+    and it is published verbatim. That is a good arrangement for detector authors and
+    a sharp edge for this endpoint: a stray `np.float32` raises inside `json.dumps`
+    and turns the whole analysis into a 500, with the traceback pointing at the
+    serialiser rather than at the detector that produced it.
+
+    Detectors should still emit plain types, and `geometric.copy_move` now does. This
+    is the belt to that pair of braces, because the failure only appears when a
+    detector *finds* something, which is the one case nobody demos before shipping.
+    """
+    if isinstance(value, dict):
+        return {k: _jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, np.ndarray):
+        return _jsonable(value.tolist())
+    return value
+
+
 if _SAMPLES.is_dir():
     app.mount("/samples", StaticFiles(directory=str(_SAMPLES)), name="samples")
+
+# The pages are read and returned as strings rather than served from here, but the
+# stylesheet they pull in has to be fetchable. Mounted rather than inlined so the
+# vendored mk-ui.css stays a recognisable copy of its upstream file.
+app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -219,9 +252,9 @@ async def analyse_upload(
                         "confidence": round(e.confidence, 4),
                         "explanation": e.explanation,
                         "localises": e.heatmap is not None,
-                        "details": {
-                            k: v for k, v in e.details.items() if k != "regions"
-                        },
+                        "details": _jsonable(
+                            {k: v for k, v in e.details.items() if k != "regions"}
+                        ),
                     }
                     for e in verdict.evidence
                 ],
