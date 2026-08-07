@@ -91,7 +91,7 @@ def duplicate_pair(
         return base[y0:y1, x0:x1]
 
     if displacement is not None:
-        dx, dy = (int(round(v)) for v in displacement)
+        dx, dy = (round(v) for v in displacement)
         if abs(dx) < 8 and abs(dy) < 8:
             return None
         # Largest flagged region, and the same window shifted by the offset. One of

@@ -91,17 +91,17 @@ def main() -> int:
     print("\nCONCEALMENT. A 250px clone, then degraded to hide it.\n")
     rng = np.random.default_rng(0)
     trials = [
-        ("hard edge", dict(feather=2), {}),
-        ("heavy feather, 60px", dict(feather=60), {}),
-        ("saved at JPEG q75", {}, dict(quality=75)),
-        ("saved at JPEG q50", {}, dict(quality=50)),
-        ("saved at JPEG q30", {}, dict(quality=30)),
+        ("hard edge", {"feather": 2}, {}),
+        ("heavy feather, 60px", {"feather": 60}, {}),
+        ("saved at JPEG q75", {}, {"quality": 75}),
+        ("saved at JPEG q50", {}, {"quality": 50}),
+        ("saved at JPEG q30", {}, {"quality": 30}),
         ("blurred 0.8px", {},
-         dict(after=lambda i: i.filter(ImageFilter.GaussianBlur(0.8)))),
+         {"after": lambda i: i.filter(ImageFilter.GaussianBlur(0.8))}),
         ("noise added, sigma 6", {},
-         dict(after=lambda i: Image.fromarray(
+         {"after": lambda i: Image.fromarray(
              np.clip(np.asarray(i, float) + rng.normal(0, 6, np.asarray(i).shape),
-                     0, 255).astype(np.uint8)))),
+                     0, 255).astype(np.uint8))}),
     ]
     for label, ckw, skw in trials:
         im = clone(src, base, dst, **{"feather": 20, **ckw})
