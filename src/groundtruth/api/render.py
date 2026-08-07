@@ -51,6 +51,70 @@ def overlay(base: np.ndarray, heat: np.ndarray, alpha: float = 0.55) -> np.ndarr
     return (base.astype(np.float32) * (1 - a) + colour * a).astype(np.uint8)
 
 
+def duplicate_pair(
+    base: np.ndarray, regions: list[dict], zoom: int = 2, gap: int = 24
+) -> tuple[np.ndarray, dict] | None:
+    """Crop the two flagged regions and set them side by side, with the numbers.
+
+    Copy-move states its finding in units nobody outside the code can check: "212
+    keypoint pairs share a displacement of (400, -10) px". True, and useless as
+    evidence to a person. The same finding shown as two crops beside each other is
+    checkable by looking, which is what evidence is supposed to be.
+
+    The comparison against an unrelated patch of the same image matters as much as
+    the pair itself. "These two look similar" is worth nothing without knowing what
+    similar means for this photograph: a wall of repeating tiles would score well by
+    accident. The control makes the ratio interpretable.
+
+    Returns None when there are not two regions to compare, which is most images.
+    """
+    if len(regions) < 2:
+        return None
+    h, w = base.shape[:2]
+
+    def crop(bbox: list[int]) -> np.ndarray | None:
+        x0, y0, x1, y1 = (int(v) for v in bbox)
+        x0, y0 = max(x0, 0), max(y0, 0)
+        x1, y1 = min(x1, w), min(y1, h)
+        if x1 - x0 < 8 or y1 - y0 < 8:
+            return None
+        return base[y0:y1, x0:x1]
+
+    top = sorted(regions, key=lambda r: -r.get("peak", 0))[:2]
+    a, b = crop(top[0]["bbox"]), crop(top[1]["bbox"])
+    if a is None or b is None:
+        return None
+
+    # Compare on the overlap, since the two boxes are rarely the exact same size.
+    ch, cw = min(a.shape[0], b.shape[0]), min(a.shape[1], b.shape[1])
+    a, b = a[:ch, :cw], b[:ch, :cw]
+    pair_diff = float(np.abs(a.astype(np.float32) - b.astype(np.float32)).mean())
+
+    # The control: a patch the same size taken from elsewhere in the frame, as far
+    # from both regions as the image allows.
+    x0 = int(top[0]["bbox"][0])
+    cx = 0 if x0 > w // 2 else max(w - cw, 0)
+    cy = min(int(top[0]["bbox"][1]), max(h - ch, 0))
+    control = base[cy:cy + ch, cx:cx + cw]
+    control_diff = (
+        float(np.abs(a.astype(np.float32) - control.astype(np.float32)).mean())
+        if control.shape == a.shape
+        else float("nan")
+    )
+
+    left = Image.fromarray(a).resize((cw * zoom, ch * zoom), Image.NEAREST)
+    right = Image.fromarray(b).resize((cw * zoom, ch * zoom), Image.NEAREST)
+    canvas = Image.new("RGB", (cw * zoom * 2 + gap, ch * zoom), (245, 246, 245))
+    canvas.paste(left, (0, 0))
+    canvas.paste(right, (cw * zoom + gap, 0))
+
+    return np.asarray(canvas), {
+        "pair_difference": round(pair_diff, 2),
+        "control_difference": round(control_diff, 2),
+        "ratio": round(control_diff / pair_diff, 1) if pair_diff > 0.01 else None,
+    }
+
+
 def render_verdict(
     image_path: Path,
     verdict: Verdict,

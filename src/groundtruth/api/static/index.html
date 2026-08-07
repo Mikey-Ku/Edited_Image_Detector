@@ -82,6 +82,37 @@
     margin: var(--mk-5) 0 0; max-width: 74ch;
     font-size: var(--mk-text-sm); color: var(--mk-text-muted);
   }
+  .aside b, .intro b { color: var(--mk-text); font-weight: 560; }
+  .lede.sub { margin-top: var(--mk-3); font-size: var(--mk-text-base); }
+  .intro {
+    margin: 0 0 var(--mk-5); max-width: 74ch;
+    font-size: var(--mk-text-base); color: var(--mk-text-muted);
+  }
+
+  /* Four panels read better two-up than squeezed into one row: the proof panel is
+     the point of the example and needs the width to be legible. */
+  .quad { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--mk-5); }
+  @media (max-width: 760px) { .quad { grid-template-columns: 1fr; } }
+  .frame .pic.light { background: var(--mk-surface-2); }
+  .frame .pic.light img { object-fit: contain; }
+
+  /* "Check its work": collapsed by default so the example still reads as one image
+     in, one answer out, but a sceptical visitor can verify rather than trust. */
+  .reveal { margin-top: var(--mk-5); }
+  .reveal summary {
+    cursor: pointer; font-size: var(--mk-text-sm); font-weight: 550;
+    color: var(--mk-accent);
+  }
+  .reveal-body {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--mk-5); align-items: center; margin-top: var(--mk-4);
+    padding: var(--mk-5); border: var(--mk-border-w) solid var(--mk-line);
+    border-radius: var(--mk-radius); background: var(--mk-surface-2);
+  }
+  @media (max-width: 760px) { .reveal-body { grid-template-columns: 1fr; } }
+  .reveal-body img { width: 100%; border-radius: var(--mk-radius-sm); display: block; }
+  .reveal-body p { margin: 0; font-size: var(--mk-text-sm); color: var(--mk-text-muted); }
+  .reveal-body b { color: var(--mk-text); }
 
   /* ---------- how it works ---------- */
   .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--mk-8); }
@@ -114,7 +145,12 @@
   .try.real { border-style: dashed; }
 
   .ctx { margin-top: var(--mk-5); }
-  .ctx summary { font-size: var(--mk-text-sm); color: var(--mk-text-muted); cursor: pointer; }
+  .ctx summary { font-size: var(--mk-text-sm); color: var(--mk-accent); cursor: pointer;
+                 font-weight: 550; }
+  .ctx-note { max-width: 70ch; margin-top: var(--mk-4); }
+  .ctx-note p { margin: 0 0 var(--mk-3); font-size: var(--mk-text-sm);
+                color: var(--mk-text-muted); }
+  .ctx-note b { color: var(--mk-text); font-weight: 560; }
   .ctx-body { display: flex; gap: var(--mk-4); flex-wrap: wrap; margin-top: var(--mk-4); }
   .ctx-body .mk-field { width: 172px; }
 
@@ -189,67 +225,99 @@
 </div></header>
 
 <section class="shell hero">
-  <h1>Check whether a photo has been edited.</h1>
-  <p class="lede">Upload an image and see what the pixels say. Retrace measures the physical
-    traces a camera leaves behind, and that editing breaks, rather than asking a model to
-    guess. <b>It needs only the image in front of it. There is nothing to compare
-    against.</b></p>
+  <h1>Was this photo edited?</h1>
+  <p class="lede">Insurance claims are settled on photographs. Adding damage that was never
+    there is easy, and checking thousands a day by eye is not. Retrace looks for the traces
+    a real camera leaves and editing destroys.
+    <b>It is given one photo and nothing else. No original, no before-and-after.</b></p>
+  <p class="lede sub">Two worked examples below, then you can try it yourself.</p>
 </section>
 
 <section class="shell block">
-  <p class="mk-eyebrow eyebrow-row">A worked example, from one image alone</p>
-  <div class="strip">
+  <p class="mk-eyebrow eyebrow-row">Example 1. Something was copied inside the photo</p>
+  <p class="intro">The most common way to fake a photo is to <b>copy part of it over
+    something else</b>: paint clean roof tiles over the hail damage, clone a patch of wall
+    over a crack. Retrace catches this by finding two areas of one photo that are the same
+    area twice.</p>
+
+  <div class="quad">
     <div class="mk-card frame">
       <div class="pic"><img src="/samples/real_courtyard_cloned_window.jpg"
-           alt="A courtyard wall with two identical decorative windows"></div>
-      <div class="cap"><b>The photo as submitted</b>
-        <span>A wall with two decorative windows. Nothing about it looks wrong, and no
-          original exists to check it against.</span></div>
+           alt="A courtyard wall with two decorative windows"></div>
+      <div class="cap"><b>1. What was handed in</b>
+        <span>A wall with two decorative windows. Nothing looks wrong, and you have no
+          original to check it against. Neither does Retrace.</span></div>
     </div>
     <div class="mk-card frame">
-      <div class="pic"><img id="ex1-overlay" alt="The same wall with both windows outlined"></div>
-      <div class="cap"><b>What Retrace found</b>
-        <span>212 keypoint pairs shifted by exactly the same (400, -10) pixels. One window
-          was clone-stamped from the other.</span></div>
+      <div class="pic"><img id="ex1-overlay" alt="The same wall, both windows highlighted"></div>
+      <div class="cap"><b>2. What Retrace flagged</b>
+        <span>It marked <b>both</b> windows, saying they are the same object appearing
+          twice, 400 pixels apart. That is the claim. The next panel is the proof.</span></div>
     </div>
     <div class="mk-card frame">
-      <div class="pic"><img id="ex1-heat" alt="A map highlighting the two duplicated windows"></div>
-      <div class="cap"><b>Where it looked</b>
-        <span>The measurement, not a difference. The image was caught disagreeing with
-          itself.</span></div>
+      <div class="pic light"><img id="ex1-proof"
+           alt="The two windows cropped and placed side by side, appearing identical"></div>
+      <div class="cap"><b>3. The proof, side by side</b>
+        <span>The two windows, cut out and zoomed. Every chip and shadow matches, because
+          one <em>is</em> the other. <b id="ex1-proof-num">Measured, they differ 73&times;
+          less than two genuinely different parts of the same wall.</b>
+          Real windows are never identical. A camera cannot photograph the same object
+          twice in one frame.</span></div>
+    </div>
+    <div class="mk-card frame">
+      <div class="pic"><img id="ex1-heat" alt="A black image with the two window areas glowing"></div>
+      <div class="cap"><b>4. The machine's own view</b>
+        <span>How suspicious each part of the photo is. <b>Black is fine, orange and white
+          are suspicious.</b> Two bright patches, because a copy always leaves two marks:
+          where it came from and where it went.</span></div>
     </div>
   </div>
-  <p class="aside">This is the ordinary case. Retrace is given one photograph and asks
-    whether it is internally consistent with having come from a single sensor in a single
-    exposure. A duplicated region is one way that fails. Pixels that were never
-    interpolated by a sensor are another.</p>
+
+  <details class="reveal">
+    <summary>Was it actually right? Show me the real photo</summary>
+    <div class="reveal-body">
+      <img src="/samples/real_courtyard_original.jpg" alt="The same wall with only one window">
+      <p><b>The genuine photograph has one window.</b> The right-hand one was pasted in.
+        <b>Retrace never saw this image</b>, it worked entirely from the edited one. This
+        is here so you can mark its homework rather than take our word for it.</p>
+    </div>
+  </details>
 </section>
 
 <section class="shell block ruled">
-  <p class="mk-eyebrow eyebrow-row">And occasionally, a shortcut</p>
+  <p class="mk-eyebrow eyebrow-row">Example 2. The editor left the original inside the file</p>
+  <p class="intro">A different photo, and a completely different route to the answer. Most
+    image files quietly carry a <b>second, postage-stamp-sized copy of themselves</b>, the
+    thumbnail your file browser shows. Editing software often rewrites the main picture and
+    forgets to update that thumbnail, which leaves the original sitting inside the same
+    file.</p>
+
   <div class="strip">
     <div class="mk-card frame">
-      <div class="pic"><img src="/samples/real_courtyard_stale_preview.jpg"
-           alt="A photograph of a courtyard gateway with two people standing in it"></div>
-      <div class="cap"><b>A different photo, as submitted</b>
-        <span>Two people standing in a gateway.</span></div>
+      <div class="pic"><img src="/samples/real_rooftops_stale_preview.jpg"
+           alt="Two costumed people in front of Paris rooftops"></div>
+      <div class="cap"><b>1. What was handed in</b>
+        <span>Two people in costume on a bridge, with rooftops behind them.</span></div>
     </div>
     <div class="mk-card frame">
-      <div class="pic"><img id="ex2-before" alt="The same courtyard with nobody in it"></div>
-      <div class="cap"><b>The original, recovered</b>
-        <span>This file still held a preview the editor never regenerated. Nobody was
-          there.</span></div>
+      <div class="pic"><img id="ex2-before" alt="The same rooftops with nobody in front"></div>
+      <div class="cap"><b>2. The thumbnail hidden in the file</b>
+        <span>Pulled straight out of the same file. <b>Nobody is there.</b> These are real
+          pixels from before the edit, not a guess or a reconstruction.</span></div>
     </div>
     <div class="mk-card frame">
-      <div class="pic"><img id="ex2-heat" alt="A map showing the outline of the two added figures"></div>
-      <div class="cap"><b>The difference</b>
-        <span>Traced to the pixel. 6.2% of the frame.</span></div>
+      <div class="pic"><img id="ex2-heat" alt="A map showing the outlines of the two added people"></div>
+      <div class="cap"><b>3. What changed between them</b>
+        <span>The two versions compared. <b>Same colour code: black is unchanged, bright is
+          changed.</b> The two figures light up, 10.4% of the picture.</span></div>
     </div>
   </div>
-  <p class="aside">When an editor rewrites the image but forgets the thumbnail buried in
-    the file, the old pixels are still there and the answer is close to conclusive. It is
-    also luck. Most files carry no usable preview, and none of the accuracy measured on
-    the benchmark comes from this path.</p>
+
+  <p class="aside"><b>This one is luck, not skill, and it is worth being clear about that.</b>
+    It only works when the editor forgot the thumbnail. Most files carry no usable copy, and
+    across the 224 photographs Retrace is scored on, this shortcut was available
+    <b>zero times</b>. None of its measured accuracy comes from it. Example 1 is how it
+    normally has to work.</p>
 </section>
 
 <section class="shell block ruled">
@@ -285,7 +353,18 @@
   <div class="tries" id="tries"></div>
 
   <details class="ctx">
-    <summary>Add claim details (optional)</summary>
+    <summary>Optional: check the photo against a claim's dates</summary>
+    <div class="ctx-note">
+      <p><b>What this is for.</b> Everything above examines the pixels. This checks the
+        photo's own clock instead. Cameras stamp the date of capture into the file, so if
+        you tell Retrace when the policy started, it can compare the two.</p>
+      <p><b>Why it matters.</b> A photograph can be completely genuine, untouched, every
+        pixel authentic, <b>and still be fraud</b>, if it was taken of damage that already
+        existed before the policy was bought. No amount of pixel analysis catches that.
+        A date does.</p>
+      <p class="mk-hint">Leave these blank and the check simply reports that it has no
+        dates to work with, which is what the sample images do.</p>
+    </div>
     <div class="ctx-body">
       <label class="mk-field"><span class="mk-label">Claim reference</span>
         <input class="mk-input mk-sm" id="claim_id" value="CLM-0001"></label>
@@ -372,11 +451,11 @@ fetch('/api/samples').then(r => r.json()).then(list => {
       box.appendChild(b);
     }
   };
-  add('Caught from the image alone, no original needed:',
+  add('Real photo, faked by copying part of it. Caught from the image alone:',
       list.filter(s => s.group === 'single'), '');
-  add('Constructed examples, one per check:',
+  add('Small images I made by hand, each one built to trigger a single check:',
       list.filter(s => s.group === 'synthetic'), '');
-  add('Real photographs, edited by hand:',
+  add('Real photographs, edited by hand. Includes ones it gets wrong:',
       list.filter(s => s.group === 'real'), 'real');
 }).catch(() => {});
 
@@ -391,16 +470,27 @@ function loadExample(sample, panels) {
       for (const [key, sel] of Object.entries(panels)) {
         if (d.images && d.images[key]) $(sel).src = d.images[key];
       }
+      return d;
     })
-    .catch(() => {});
+    .catch(() => ({}));
 }
 
 /* Sequential rather than parallel: each analysis is CPU-bound, and firing both at
    once made the first panel noticeably slower to appear. */
 loadExample('real_courtyard_cloned_window.jpg',
-            { overlay: '#ex1-overlay', heatmap: '#ex1-heat' })
-  .then(() => loadExample('real_courtyard_stale_preview.jpg',
-                          { before: '#ex2-before', changed: '#ex2-heat' }));
+            { overlay: '#ex1-overlay', heatmap: '#ex1-heat', proof: '#ex1-proof' })
+  .then(d => {
+    /* The multiple in the caption is measured on this run rather than typed into the
+       HTML, so the sentence cannot quietly stop matching the picture beside it. */
+    const p = d && d.proof;
+    if (p && p.ratio) {
+      $('#ex1-proof-num').textContent =
+        `Measured, they differ ${p.ratio}× less than two genuinely different parts ` +
+        `of the same wall.`;
+    }
+    return loadExample('real_rooftops_stale_preview.jpg',
+                       { before: '#ex2-before', changed: '#ex2-heat' });
+  });
 
 /* Eases toward 90% and completes on response. The stage names are the real pipeline
    order; the timing is an estimate, since analysis is a single request. */

@@ -23,7 +23,7 @@ from ..core.types import ClaimContext, ImageCase
 from ..fusion.localisation import peak_regions
 from ..pipeline.runner import analyse
 from ..recovery.reconstruct import reconstruct
-from .render import colourise, overlay
+from .render import colourise, duplicate_pair, overlay
 
 app = FastAPI(title="Retrace", docs_url="/api/docs")
 
@@ -206,10 +206,19 @@ async def analyse_upload(
 
         images: dict[str, str | None] = {"original": _data_uri(base)}
         regions: list[dict] = []
+        proof: dict | None = None
         if verdict.heatmap is not None:
             images["overlay"] = _data_uri(overlay(base, verdict.heatmap))
             images["heatmap"] = _data_uri(colourise(verdict.heatmap))
             regions = peak_regions(verdict.heatmap, threshold=0.5)
+
+            # When two regions were flagged, the finding can be shown rather than
+            # asserted: crop both and put them side by side. Absent for most images,
+            # which is why the UI treats it as an extra panel and not a fixture.
+            made = duplicate_pair(base, regions)
+            if made is not None:
+                pair_img, proof = made
+                images["proof"] = _data_uri(pair_img)
 
         recovery = None
         recon = reconstruct(path)
@@ -259,6 +268,7 @@ async def analyse_upload(
                     for e in verdict.evidence
                 ],
                 "regions": regions[:8],
+                "proof": proof,
                 "recovery": recovery,
                 "images": images,
             }
