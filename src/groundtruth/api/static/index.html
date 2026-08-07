@@ -83,6 +83,24 @@
     font-size: var(--mk-text-sm); color: var(--mk-text-muted);
   }
   .aside b, .intro b { color: var(--mk-text); font-weight: 560; }
+
+  /* Three columns, because the three things a visitor needs are the job, the method
+     and the limits, and burying the limits under the other two is how a portfolio
+     page starts overclaiming. */
+  .purpose { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--mk-6); }
+  @media (max-width: 860px) { .purpose { grid-template-columns: 1fr; gap: var(--mk-5); } }
+  .purpose h3 {
+    margin: 0 0 var(--mk-3); font-size: var(--mk-text-base); font-weight: 600;
+  }
+  .purpose p {
+    margin: 0 0 var(--mk-3); font-size: var(--mk-text-sm); color: var(--mk-text-muted);
+  }
+  .purpose b { color: var(--mk-text); font-weight: 560; }
+  .honest {
+    margin-top: var(--mk-6); font-size: var(--mk-text-sm);
+    color: var(--mk-text-muted); max-width: 88ch;
+  }
+  .honest b { color: var(--mk-text); font-weight: 560; }
   .lede.sub { margin-top: var(--mk-3); font-size: var(--mk-text-base); }
   .intro {
     margin: 0 0 var(--mk-5); max-width: 74ch;
@@ -225,12 +243,53 @@
 </div></header>
 
 <section class="shell hero">
-  <h1>Was this photo edited?</h1>
-  <p class="lede">Insurance claims are settled on photographs. Adding damage that was never
-    there is easy, and checking thousands a day by eye is not. Retrace looks for the traces
-    a real camera leaves and editing destroys.
-    <b>It is given one photo and nothing else. No original, no before-and-after.</b></p>
-  <p class="lede sub">Two worked examples below, then you can try it yourself.</p>
+  <h1>Can this photo be trusted as evidence?</h1>
+  <p class="lede">Insurance claims are settled on photographs, and nobody can inspect
+    thousands a day by eye. Retrace runs six independent checks on a single image and
+    reports <b>what each one could and could not establish.</b>
+    It is given one photo and nothing else. No original, no before-and-after.</p>
+</section>
+
+<section class="shell block">
+  <p class="mk-eyebrow eyebrow-row">What it is</p>
+  <div class="purpose">
+    <div>
+      <h3>The job</h3>
+      <p>Sort a pile of claim photos into three bins: <b>fine</b>, <b>suspicious</b>, and
+        <b>a person needs to look at this</b>. It never decides a claim. It decides what
+        order a human should work in, which is the thing that actually saves time.</p>
+      <p>Three outcomes rather than two, because a system forced to choose between "fine"
+        and "fraud" on every image will be confidently wrong in public.</p>
+    </div>
+    <div>
+      <h3>How it decides</h3>
+      <p>Six checks run independently, each answering a different question, each returning
+        three separate things: <b>can I speak to this image at all</b>, <b>what did I
+        find</b>, and <b>how much do I trust myself here</b>.</p>
+      <p>A check that cannot run is dropped from the vote rather than counted as neutral.
+        "I have nothing to say about this" and "I looked and found nothing" are different
+        claims, and averaging them together is how these systems produce confident
+        nonsense.</p>
+    </div>
+    <div>
+      <h3>The unusual part</h3>
+      <p>Most of the work here went into finding out <b>where it stops working</b>, and
+        those limits are published rather than buried.</p>
+      <p>Four detectors were built, measured, and switched off because the measurement
+        said they did not work. One of them scored below chance after a repair. The
+        checks that ship are the ones that survived.</p>
+    </div>
+  </div>
+
+  <div class="mk-alert honest">
+    <div>
+      <b>What it will not do.</b> It does not catch AI-generated images from the pixels;
+      that only works when the file carries a signature, and one re-save removes it. It
+      misses a copied region smaller than about 1% of the frame, one blended with a heavy
+      feather, or one that was mirrored on its way in. Those numbers come from
+      deliberately trying to defeat it, and every one of them is written down.
+    </div>
+  </div>
 </section>
 
 <section class="shell block">

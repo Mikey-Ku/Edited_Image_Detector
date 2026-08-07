@@ -311,6 +311,42 @@ headline results are measured on camera-original TIFFs.
 This is the fifth idea in this document killed by measurement before shipping, and the
 cheapest one to have been wrong about.
 
+### Copy-move: the measured envelope
+
+The second-strongest detector in the set had no recorded blind spots, which is not
+the same as having none. `scripts/sweep_copy_move.py` stages a clone into a real
+photograph and varies size, concealment, and whether the copy was transformed.
+
+**Visibility is not the axis.** The detector measures duplication, so degrading the
+image afterwards does almost nothing:
+
+| after the clone | result |
+|---|---|
+| JPEG q75 / q50 / q30 | caught, 62 / 53 / 30 pairs |
+| blurred 0.8px | caught, 82 pairs |
+| noise added, sigma 6 | caught, 67 pairs |
+| rotated 3 degrees | caught, 72 pairs |
+| scaled 1.08x | caught, 76 pairs |
+
+Three things do defeat it:
+
+| evasion | result | why |
+|---|---|---|
+| region under ~1% of frame | **missed** below 120px | too few keypoints inside the patch for a consensus |
+| heavy feathering, 60px edge on a 250px patch | **missed**, 0 pairs | too little of the patch stays truly identical |
+| **mirroring the copy** | **missed**, 0 pairs | a flipped copy has no single consistent displacement |
+
+**Two of those three are ordinary editing habits rather than attacks.** A healing
+brush feathers aggressively by default, and retouchers mirror clones precisely so the
+result does not look repetitive. Neither requires knowing this system exists.
+
+So the supportable claim is narrow, and narrower than the demo implies: *a hard-edged
+or lightly-blended, un-mirrored copy covering more than about 1% of the frame*, after
+which it survives almost any degradation.
+
+Mirroring is the fixable one. Matching descriptors against a horizontally flipped copy
+would catch it at roughly double the cost. Unbuilt and unmeasured.
+
 ### What did work: read what the file says about itself
 
 The mistake above was looking for the answer in the pixels. It was in the bytes.
