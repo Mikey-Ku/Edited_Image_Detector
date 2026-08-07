@@ -21,8 +21,7 @@ class Detector(ABC):
     """Base class for every detection method.
 
     Subclasses set the class attributes and implement :meth:`_run`. The public
-    :meth:`run` wraps it so a detector that raises cannot take down the pipeline —
-    a crashed detector becomes "not applicable", which is honest: it produced no
+    :meth:`run` wraps it so a detector that raises cannot take down the pipeline, a crashed detector becomes "not applicable", which is honest: it produced no
     evidence.
     """
 

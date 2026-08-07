@@ -34,7 +34,7 @@
 ### Detectors are independent and know when they don't apply
 
 Every detector implements `applicable(case) -> bool`. A JPEG detector on a PNG returns
-`False` and is excluded from fusion — it does **not** return a neutral score. Missing
+`False` and is excluded from fusion; it does **not** return a neutral score. Missing
 evidence and neutral evidence are different things and conflating them silently corrupts
 the fused probability.
 
@@ -47,7 +47,7 @@ two hundred, and fusion has to know that.
 ### Three outcomes, not two
 
 `AUTO_CLEAR` / `FLAG` / `ROUTE_TO_HUMAN`. A system that must decide on every input is
-useless in a regulated setting. **The product is triage, not judgement** — the model's job
+useless in a regulated setting. **The product is triage, not judgement**: the model's job
 is to cut 100k images down to the 500 an adjuster must actually look at.
 
 ### Explanations are first-class
@@ -64,7 +64,7 @@ eleven days."* An adjuster has to act on this, and a regulator has to audit it.
 
 > At 94% auto-clear coverage, 99% of manipulations are still caught.
 
-Accuracy is close to meaningless here — the base rate of fraud is low and the error costs
+Accuracy is close to meaningless here: the base rate of fraud is low and the error costs
 are wildly asymmetric. What a buyer evaluates is: *how much review labour does this remove,
 and what does it miss?*
 
@@ -79,12 +79,61 @@ in dollars, not in F1.
 Reliability diagram + Expected Calibration Error. If the system says 0.9, it must be right
 about 90% of the time. Uncalibrated confidence makes the abstention threshold meaningless.
 
-### Generalisation — the experiment that matters
+**Measured, and the answer is that calibration is sensor-specific.** `scripts/calibrate.py`
+fits a two-parameter Platt map on the pooled log-odds and validates it two ways, because the
+two protocols answer different questions and only the pair is informative:
+
+| protocol | question | result |
+|---|---|---|
+| cross-camera (fit D7000, test D90, and reverse) | does it transfer to an unseen sensor? | **no**, no metric significant, every bootstrap interval spans zero |
+| within-camera 5-fold, out-of-fold | is it learnable at all at this N? | **yes**, ECE/Brier/log-loss all improved, 20/20 shuffles |
+
+Running only the first would confuse *does not transfer* with *does not exist*; running only
+the second would claim a calibration deployment cannot use.
+
+The fitted slopes explain the split: **2.05 [1.42, 3.01]** on the D7000 versus
+**1.02 [0.53, 1.72]** on the D90, difference **+1.03 [+0.04, +2.08], p = 0.038** by
+bootstrap on the difference itself, rather than by eyeballing overlap between two intervals,
+which is a different and weaker test. The D7000's fusion is genuinely under-confident; the
+D90's scale is already about right and only its centre is off.
+
+Three details worth keeping:
+
+- **Calibration cannot change AUC.** A monotonic map preserves every pairwise ordering; the
+  measured change is 0.0e+00, bit-identical. Any reported calibration that "improved AUC" is
+  a bug. What moves is meaning, not skill.
+- **Equal-mass bins, not equal-width.** These scores cluster: with equal-width bins 119 of
+  224 images land in `[0.2,0.3)` and neighbouring bins hold one or two, so most of the
+  reported ECE is sampling noise. Switching binning changed the headline ECE and flipped the
+  apparent sign of one cross-camera result. The binning choice is not cosmetic.
+- **ECE and proper scoring rules can disagree**, and did: fitting on the D7000 improved the
+  D90's ECE while worsening its Brier and log loss. Believe the proper scoring rules; an ECE
+  gain with no Brier gain is mostly images changing bins.
+
+Consequence for the shipped system: `fuse()` takes an optional `Calibrator` and **defaults to
+none**. Applying a global calibrator would export one sensor's correction to another and make
+the number look more trustworthy while making it less true.
+
+### Base rate
+
+Korus pairs every forgery with its own pristine original, so its prevalence is 50% by
+construction. A probability is only a probability with respect to a prior, and a claims
+stream is nowhere near 50% manipulated. `Calibrator.shift_prior()` re-targets a fitted
+calibrator by adding the difference of the prior log-odds, valid when the deployment
+population differs only in *frequency*, not in difficulty.
+
+The shift is worth reporting because of what it shows: at 2% prevalence **no Korus image
+reaches 0.5**. The evidence this system extracts is not, on its own, strong enough to make
+manipulation the more likely explanation for any single photograph in a realistic stream.
+That is an argument for the three-outcome design and the risk–coverage framing above, not
+against the detectors. Ordering is what routes review queues, and ordering is preserved.
+
+### Generalisation: the experiment that matters
 
 Hold out **entire generators and entire manipulation tools**, not random samples.
 
 Train the learned detector on one generator, evaluate on an unseen one, and show accuracy
-collapsing toward chance — while the physics-based detectors hold. This is the central
+collapsing toward chance, while the physics-based detectors hold. This is the central
 argument for the whole architecture, and it needs to be measured, not asserted.
 
 ### Robustness sweep
@@ -103,7 +152,7 @@ leaks and inflates everything.
 
 ## Evaluation results
 
-### Synthetic validation did not predict real performance — at all
+### Synthetic validation did not predict real performance, at all
 
 **Date:** 2026-08-02 · **Data:** Korus Realistic Tampering Dataset, 112 tampered +
 112 matched pristine originals, Nikon D7000 / D90 / Canon 60D, 1920×1080 TIFF,
@@ -130,7 +179,7 @@ pristine  P(manip): min 0.327  p25 0.424  median 0.560  p75 0.655  max 0.871
 This is not degradation. It is **chance performance**. The system has zero
 discriminative power on real photographs.
 
-#### Why — the noise detector's model of the world is wrong
+#### Why the noise detector's model of the world is wrong
 
 Running `sensor.noise_inconsistency` alone on matched tampered/pristine pairs of
 the *same scene*:
@@ -144,7 +193,7 @@ r36610622t            0/1683              317     <- pristine flagged, tampered 
 ```
 
 Mean separation: **−0.065**. Tampered scores higher than its own pristine original
-on **4 of 14 pairs** — worse than a coin flip.
+on **4 of 14 pairs**, worse than a coin flip.
 
 The detector assumes **one global noise level per image**, and treats local
 deviation as evidence of splicing. That assumption is false for real photographs:
@@ -157,7 +206,7 @@ deviation as evidence of splicing. That assumption is false for real photographs
 - The adaptive structure filter drops the busiest 15% of blocks, which is enough
   on a smooth synthetic scene and nowhere near enough on a real photograph.
 
-So on a real image, hundreds of blocks legitimately deviate — and they deviate
+So on a real image, hundreds of blocks legitimately deviate, and they deviate
 identically in the tampered and pristine versions, because those two files are the
 same photograph apart from a region covering ~5% of the frame.
 
@@ -166,7 +215,7 @@ same photograph apart from a region covering ~5% of the frame.
 **The fixture was built on the same false assumption as the detector.**
 `noise_splice()` generates a scene with *uniform* noise and pastes in a region with
 a different uniform level. That is precisely the world the detector models, so it
-scored 0.99 — the test could not have failed. It was not measuring whether the
+scored 0.99. The test could not have failed. It was not measuring whether the
 detector works; it was measuring whether the code matched its own premise.
 
 Synthetic fixtures verify that a detector fires **in the right place given its
@@ -179,13 +228,13 @@ needed, and passing the first says nothing about the second.
    rather than a global constant, and flag deviation from *that* model. This is
    the standard approach in the forensics literature and the synthetic fixture
    hid the need for it entirely.
-2. **Add a matched-pair regression harness** — every future change measured on
+2. **Add a matched-pair regression harness**: every future change measured on
    tampered vs. its own pristine original, since scene-level variation cancels out.
 3. `metadata.container_identity` fires on all 224 images at score 0.55 because
    TIFF is lossless. For a corpus of RAW conversions that is a constant offset
    carrying no information, and it should abstain rather than nudge every score.
 4. **A JPEG corpus is still needed.** These TIFFs mean `block_grid`, `ela`, and
-   `preview_mismatch` all correctly abstained — 0 of 224 — so the compression tier
+   `preview_mismatch` all correctly abstained, 0 of 224, so the compression tier
    is entirely unvalidated on real data.
 
 #### Status of every earlier number in this repo
@@ -203,21 +252,21 @@ repository should be quoted as evidence that the system detects manipulation.
 |---|---|
 | `DocTamper` | document tampering, pixel-level masks |
 | `CASIA v2`, `IMD2020`, `DEFACTO` | classical splicing/copy-move with masks |
-| Korus Realistic Tampering | **primary source** — real cameras, hand-made edits, masks |
-| Self-generated | implementation checks only — see the results above |
+| Korus Realistic Tampering | **primary source**: real cameras, hand-made edits, masks |
+| Self-generated | implementation checks only; see the results above |
 
 ### Building the attacker
 
 Generated manipulations give pixel-perfect ground truth and full control over attack
 difficulty, which makes them good for verifying a detector fires in the right place. They
-are **not** evidence that it works — see the results above for what happens when a fixture
+are **not** evidence that it works; see the results above for what happens when a fixture
 encodes the same assumption as the detector it tests. Tiers:
 
-1. **Crude** — copy-paste, no blending
-2. **Competent** — Photoshop-equivalent: blended, colour-matched, resampled
-3. **AI inpainting** — diffusion-based add/remove damage
-4. **Fully synthetic** — generated damage photos end to end
-5. **Laundered** — any of the above, then re-encoded/screenshotted to strip forensic traces
+1. **Crude**: copy-paste, no blending
+2. **Competent**. Photoshop-equivalent: blended, colour-matched, resampled
+3. **AI inpainting**, diffusion-based add/remove damage
+4. **Fully synthetic**, generated damage photos end to end
+5. **Laundered**, any of the above, then re-encoded/screenshotted to strip forensic traces
 
 Reporting detection rate *per attack tier* is far more informative than a single number,
 and tier 5 is where honest systems admit their limits.
@@ -226,6 +275,6 @@ and tier 5 is where honest systems admit their limits.
 
 ## Non-goals
 
-- Not a general-purpose forensics library — claim context is load-bearing
-- Not a courtroom tool — output is triage, not proof
+- Not a general-purpose forensics library, claim context is load-bearing
+- Not a courtroom tool: output is triage, not proof
 - Not attempting real-time video
