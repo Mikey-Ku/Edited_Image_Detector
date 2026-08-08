@@ -45,45 +45,34 @@ _STATIC = Path(__file__).parent / "static"
 # having to go find a manipulated image first.
 _SAMPLES = Path(__file__).resolve().parents[3] / "samples"
 
-# Served so the worked example on the landing page shows real files rather than
-# a mockup of what the tool would produce.
-# (blurb, group). Real photographs are grouped separately and labelled honestly:
-# Retrace currently cannot separate them from their own unedited originals, and
-# hiding that behind a flattering demo would misrepresent the tool.
-_SAMPLE_INFO = {
-    "claim_car_damage_extended.jpg": (
-        ("A real damaged car, with a crumpled section of the front door cloned onto "
-         "a rear panel that was never hit. No original attached: the image is caught "
-         "disagreeing with itself."), "single"),
-    "claim_wall_crack_duplicated.jpg": (
-        ("A real subsidence crack, partly duplicated so the damage looks worse. The "
-         "file also still carries a thumbnail of the pre-edit original."), "single"),
-    "claim_car_original.jpg": (
-        "The untouched car photograph, for checking the system's work.", "real"),
-    "claim_wall_original.jpg": (
-        "The untouched wall photograph, for checking the system's work.", "real"),
-    "edited_stale_preview.jpg": (
-        ("Synthetic. The editor rewrote the image but left the embedded preview, "
-         "so the original is recoverable."), "synthetic"),
-    "splice_noise_mismatch.jpg": (
-        "Synthetic. A region spliced in carrying a different sensor-noise level.", "synthetic"),
-    "clean_uniform_noise.jpg": (
-        "Synthetic. Unedited control for the noise splice.", "synthetic"),
-    "real_courtyard_cloned_window.jpg": (
-        "A decorative window clone-stamped along a wall. Caught from the image alone.",
-        "single"),
-    "real_courtyard_edited.jpg": (
-        ("Real photograph, two figures composited in by hand in GIMP. "
-         "Retrace does not detect this one."), "real"),
-    "real_courtyard_original.jpg": (
-        "The unedited original of the courtyard photograph.", "real"),
-    "real_courtyard_stale_preview.jpg": (
-        ("Real photograph, hand-edited, and the file still holds a preview of the "
-         "original. Retrace recovers it."), "real"),
-    "real_rooftops_stale_preview.jpg": (
-        ("Real photograph, hand-edited, preview of the original intact. "
-         "Retrace recovers it."), "real"),
-}
+# The row of try-it buttons under the drop zone, in display order.
+#
+# Four, because they have to fit one line and because four is enough to cover
+# every outcome the tool has: caught two different ways, correctly cleared, and
+# honestly missed. The last one earns its place. A sample row showing only
+# successes is a highlight reel, and Retrace genuinely cannot catch a careful
+# hand-composite, so the visitor should be able to watch it fail on demand.
+#
+# Every other file in samples/ stays on disk and stays analysable by name, it is
+# just not advertised here. The synthetic noise-splice trio was dropped outright:
+# they demonstrated a detector rather than a claim, and the claim photographs
+# cover the same ground with something a person recognises.
+_SAMPLE_ROW: tuple[tuple[str, str, str], ...] = (
+    ("claim_car_damage_extended.jpg", "Damage extended",
+     ("A real damaged car, with a crumpled section of the front door cloned onto a "
+      "rear panel that was never hit. No original attached: the image is caught "
+      "disagreeing with itself.")),
+    ("claim_wall_crack_duplicated.jpg", "Crack duplicated",
+     ("A real subsidence crack, partly duplicated so the damage looks worse. The "
+      "file also still carries a thumbnail of the pre-edit original, so the before "
+      "is recoverable.")),
+    ("claim_car_original.jpg", "Untouched original",
+     ("The unedited car photograph. Checks that the system clears an honest image "
+      "rather than flagging everything.")),
+    ("real_courtyard_edited.jpg", "An edit it misses",
+     ("Real photograph, two figures composited in by hand in GIMP. Retrace does not "
+      "detect this one, and the demo shows that rather than hiding it.")),
+)
 
 # Panels are for looking at, not for measuring. Downscaling keeps the payload
 # reasonable on a 1920x1080 source; all analysis runs at native resolution.
@@ -249,16 +238,19 @@ def science() -> str:
 
 @app.get("/api/samples")
 def samples() -> JSONResponse:
+    """The curated row, in order, skipping anything not actually on disk.
+
+    Deliberately not a listing of samples/. Globbing the directory meant any file
+    dropped in there appeared as an unlabelled button, and it put the row's
+    contents and its order outside anyone's control.
+    """
     if not _SAMPLES.is_dir():
         return JSONResponse([])
     return JSONResponse(
         [
-            {
-                "name": p.name,
-                "blurb": _SAMPLE_INFO.get(p.name, ("", "synthetic"))[0],
-                "group": _SAMPLE_INFO.get(p.name, ("", "synthetic"))[1],
-            }
-            for p in sorted(_SAMPLES.glob("*.jpg"))
+            {"name": name, "label": label, "blurb": blurb}
+            for name, label, blurb in _SAMPLE_ROW
+            if (_SAMPLES / name).is_file()
         ]
     )
 

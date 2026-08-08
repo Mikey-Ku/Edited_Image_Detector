@@ -151,11 +151,44 @@ def test_repeat_sample_analysis_is_served_from_cache(client):
     )
 
 
-def test_samples_endpoint_lists_bundled_images(client):
+def test_sample_row_is_curated_not_a_directory_listing(client):
+    """The row is chosen files in a chosen order, not whatever sits in samples/.
+
+    Globbing the directory put the row's contents and its order outside anyone's
+    control, and any file dropped in appeared as a button labelled with its own
+    filename.
+    """
+    from groundtruth.api.server import _SAMPLE_ROW, _SAMPLES
+
     r = client.get("/api/samples")
     assert r.status_code == 200
-    for s in r.json():
-        assert {"name", "blurb", "group"} <= set(s)
+    row = r.json()
+
+    assert [s["name"] for s in row] == [name for name, _, _ in _SAMPLE_ROW]
+    assert len(row) < len(list(_SAMPLES.glob("*.jpg"))), "back to listing the folder"
+    for s in row:
+        assert {"name", "label", "blurb"} <= set(s)
+        assert s["label"] and len(s["label"]) <= 20, f"{s['label']!r} will wrap the row"
+
+
+def test_the_sample_row_keeps_a_case_retrace_fails(client):
+    """A demo row of nothing but successes is a highlight reel.
+
+    Retrace cannot catch a careful hand-composite. real_courtyard_edited.jpg is in
+    the row so a visitor can watch it fail on demand, and that button is the
+    obvious thing to drop the next time someone tidies the demo up.
+
+    If a detector genuinely improves and this starts flagging, the fix is to
+    rewrite the blurb, not to delete the test.
+    """
+    row = client.get("/api/samples").json()
+    miss = next((s for s in row if s["name"] == "real_courtyard_edited.jpg"), None)
+    assert miss is not None, "the row no longer offers a case Retrace misses"
+
+    body = client.post("/api/analyse", data={"sample": miss["name"]}).json()
+    assert body["verdict"]["decision"] != "flag", (
+        "this sample is advertised as one Retrace misses, but it now flags it"
+    )
 
 
 def test_pages_render(client):

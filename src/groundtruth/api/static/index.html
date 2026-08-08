@@ -66,7 +66,11 @@
   .lede b { color: var(--mk-text); font-weight: 550; }
 
   /* ---------- worked example ---------- */
-  section.block { padding-block: var(--mk-7); }
+  /* No padding rule here on purpose. This said `padding-block: var(--mk-7)`, and
+     mk-ui's scale runs 1-6, 8, 10, 12, 16, so --mk-7 does not exist: the
+     declaration was invalid and computed to zero for the whole of the layout
+     work. The section rhythm you see, about 40px, comes from .eyebrow-row's
+     margin. Adding real padding back here would roughly triple every gap. */
   section.ruled { border-top: var(--mk-border-w) solid var(--mk-line); }
   .eyebrow-row { margin: 0 0 var(--mk-5); }
   .strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--mk-5); }
@@ -140,7 +144,11 @@
     letter-spacing: var(--mk-display-track);
     font-weight: 600;
   }
-  .upload { padding-block: var(--mk-2) var(--mk-7); }
+  /* --mk-8, not the --mk-7 this used to name, which does not exist and so voided
+     the whole declaration. With three rows of sample buttons the missing gap was
+     hidden; at one row the next section sat 8px under the buttons. 32px here puts
+     it at 40, matching every other section break on the page. */
+  .upload { padding-block: var(--mk-2) var(--mk-8); }
   .tool-note {
     margin: 0 0 var(--mk-4); font-size: var(--mk-text-sm); color: var(--mk-text-faint);
   }
@@ -149,9 +157,7 @@
 
   .tries { display: flex; align-items: center; gap: var(--mk-2); flex-wrap: wrap; margin-top: var(--mk-3); }
   .tries > span { font-size: var(--mk-text-sm); color: var(--mk-text-faint); }
-  .tries > span.break { flex-basis: 100%; margin-top: var(--mk-1); }
   .try { border-radius: var(--mk-radius-full); }
-  .try.real { border-style: dashed; }
 
 
   /* ---------- progress ---------- */
@@ -418,27 +424,24 @@ drop.ondrop = e => { e.preventDefault(); drop.classList.remove('is-over');
                      if (e.dataTransfer.files[0]) send(e.dataTransfer.files[0]); };
 fileInput.onchange = () => fileInput.files[0] && send(fileInput.files[0]);
 
+/* One row, in the order the server sends. It used to be three labelled rows
+   split by sample group, which read as a filing system for images the visitor
+   has no stake in, and the button text was the filename with the underscores
+   taken out. Each button now says what you will learn by pressing it. */
 fetch('/api/samples').then(r => r.json()).then(list => {
   if (!list.length) return;
   const box = $('#tries');
-  const add = (label, items, cls) => {
-    if (!items.length) return;
-    const tag = document.createElement('span');
-    tag.textContent = label;
-    if (box.childElementCount) tag.className = 'break';
-    box.appendChild(tag);
-    for (const s of items) {
-      const b = document.createElement('button');
-      b.className = 'mk-btn mk-btn--secondary mk-sm try' + (cls ? ' ' + cls : '');
-      b.textContent = s.name.replace(/^real_/, '').replace(/\.jpg$/, '').replace(/_/g, ' ');
-      b.title = s.blurb;
-      b.onclick = () => send(s.name);
-      box.appendChild(b);
-    }
-  };
-  add('No image to hand? Try one:', list.filter(s => s.group === 'single'), '');
-  add('Built to trigger one check each:', list.filter(s => s.group === 'synthetic'), '');
-  add('Real photos, including ones it gets wrong:', list.filter(s => s.group === 'real'), 'real');
+  const tag = document.createElement('span');
+  tag.textContent = 'No image to hand? Try one:';
+  box.appendChild(tag);
+  for (const s of list) {
+    const b = document.createElement('button');
+    b.className = 'mk-btn mk-btn--secondary mk-sm try';
+    b.textContent = s.label;
+    b.title = s.blurb;
+    b.onclick = () => send(s.name);
+    box.appendChild(b);
+  }
 }).catch(() => {});
 
 /* Both worked examples show real output rather than a mockup of it. The panels are
