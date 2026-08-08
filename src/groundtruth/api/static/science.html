@@ -130,6 +130,7 @@
     <li><a href="#context">Claim context</a></li>
     <li><a href="#fusion">Combining the measurements</a></li>
     <li><a href="#reality">What happens on real photographs</a></li>
+      <li><a href="#fails">Where it fails</a></li>
   </ol>
 </div>
 
@@ -353,6 +354,63 @@ r36610622t       0       317     <span class="c">← unedited flagged, edited cl
     the entire compression tier correctly abstained on all 224 and remains unverified on
     real data.</li>
 </ul>
+
+
+<h2 id="fails">9. Where it fails</h2>
+
+<p>Every limit below comes from deliberately trying to defeat the system, and each one
+is reproducible from a script in the repository. A detector with no recorded blind
+spots does not have none, it has unmeasured ones.</p>
+
+<h3>Copy-move</h3>
+
+<p><strong>Visibility is not the axis.</strong> The check measures duplication, not how
+obvious an edit looks, so degrading the image afterwards achieves nothing. A clone
+survives JPEG quality 30, blurring, added grain, a three-degree rotation and a 1.08x
+rescale. All caught.</p>
+
+<table>
+  <tr><th>Evasion</th><th>Result</th><th>Why</th></tr>
+  <tr><td>region under ~1% of the frame</td><td>missed below 120px</td>
+      <td>too few keypoints inside the patch to agree on an offset</td></tr>
+  <tr><td>heavy feathering, 60px on a 250px patch</td><td>missed</td>
+      <td>too little of the patch stays truly identical</td></tr>
+  <tr><td>the copy mirrored</td><td>missed</td>
+      <td>a flipped copy has no single consistent displacement</td></tr>
+</table>
+
+<div class="box">
+  <h4>Two of those three are habits, not attacks</h4>
+  <p>A healing brush feathers aggressively by default, and retouchers mirror clones
+  precisely so the result does not look repetitive. Neither requires knowing this
+  system exists, which makes the supportable claim narrow: <strong>a hard-edged or
+  lightly-blended, un-mirrored copy covering more than about 1% of the frame</strong>.
+  Mirroring is the fixable one, by matching against flipped descriptors at roughly
+  double the cost, and it is unbuilt.</p>
+</div>
+
+<h3>Fully generated images</h3>
+
+<p>A model asked to edit a photograph regenerates the whole frame, so no region
+disagrees with its surroundings and the pixel tiers have nothing to compare. A real
+ChatGPT export was <strong>cleared at 0.288</strong>, lower than a genuine untouched
+photograph.</p>
+
+<p>The answer was in the file rather than the pixels: that export carries a signed C2PA
+manifest naming OpenAI and <code>gpt-image</code>, which takes the same file to
+<strong>FLAG at 0.876</strong>. But credentials are metadata, and metadata does not
+survive contact with anything. Measured across a re-save, a JPEG re-encode at q95 or
+q75, a resize and a screenshot: <strong>0% survived</strong>.</p>
+
+<div class="box">
+  <h4>The case nothing here catches</h4>
+  <p>A generated image whose credentials have been stripped. The pixel tiers cannot see
+  it because there is no local inconsistency, and the provenance tier cannot see it
+  because the signature is gone. An earlier attempt to catch it from the pixels, by
+  reporting images that carry no camera fingerprint at all, was measured and discarded:
+  an honest photograph re-saved at JPEG q75 already fails that test 93% of the time, so
+  it cannot separate <em>generated</em> from <em>forwarded through WhatsApp</em>.</p>
+</div>
 
 </main>
 

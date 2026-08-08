@@ -49,15 +49,18 @@
   .head nav { margin-left: auto; }
 
   /* ---------- hero ---------- */
-  .hero { padding: var(--mk-12) 0 var(--mk-8); }
+  .hero { padding: var(--mk-10) 0 var(--mk-6); }
   h1 {
     margin: 0 0 var(--mk-4);
     font-family: var(--mk-font-display);
-    font-size: clamp(2rem, 5vw, 2.6rem);
-    line-height: 1.12;
+    /* Sized to sit on one line at desktop. The old clamp topped out at 2.6rem
+       against a 17ch max-width, which forced a short question onto three lines
+       and gave the page a title tall enough to fill the first screen. */
+    font-size: clamp(1.75rem, 3.2vw, 2.15rem);
+    line-height: 1.15;
     letter-spacing: var(--mk-display-track);
     font-weight: 600;
-    max-width: 17ch;
+    max-width: 30ch;
   }
   .lede { margin: 0; font-size: var(--mk-text-lg); color: var(--mk-text-muted); max-width: 62ch; }
   .lede b { color: var(--mk-text); font-weight: 550; }
@@ -223,51 +226,29 @@
 </div></header>
 
 <section class="shell hero">
-  <h1>Can this photo be trusted as evidence?</h1>
-  <p class="lede">Insurance claims are settled on photographs, and nobody can inspect
-    thousands a day by eye. Retrace runs six independent checks on a single image and
-    reports <b>what each one could and could not establish.</b>
-    It is given one photo and nothing else. No original, no before-and-after.</p>
+  <h1>Was this photo edited?</h1>
+  <p class="lede">Drop in one image. Retrace answers <b>clear</b>, <b>flag</b>, or
+    <b>send it to a person</b>, and shows the reasoning behind every check it ran.
+    Built for insurance claims, where a photograph decides a payout.</p>
 </section>
 
 <section class="shell block">
-  <p class="mk-eyebrow eyebrow-row">What it is</p>
+  <p class="mk-eyebrow eyebrow-row">In short</p>
   <div class="purpose">
     <div>
-      <h3>The job</h3>
-      <p>Sort a pile of claim photos into three bins: <b>fine</b>, <b>suspicious</b>, and
-        <b>a person needs to look at this</b>. It never decides a claim. It decides what
-        order a human should work in, which is the thing that actually saves time.</p>
-      <p>Three outcomes rather than two, because a system forced to choose between "fine"
-        and "fraud" on every image will be confidently wrong in public.</p>
+      <h3>Three answers, not two</h3>
+      <p>It sorts a queue rather than deciding a claim. What it decides is the order
+        a human should work in.</p>
     </div>
     <div>
-      <h3>How it decides</h3>
-      <p>Six checks run independently, each answering a different question, each returning
-        three separate things: <b>can I speak to this image at all</b>, <b>what did I
-        find</b>, and <b>how much do I trust myself here</b>.</p>
-      <p>A check that cannot run is dropped from the vote rather than counted as neutral.
-        "I have nothing to say about this" and "I looked and found nothing" are different
-        claims, and averaging them together is how these systems produce confident
-        nonsense.</p>
+      <h3>Six independent checks</h3>
+      <p>Each reports what it could and could not establish. One that cannot speak to
+        an image is dropped from the vote, not counted as neutral.</p>
     </div>
     <div>
-      <h3>The unusual part</h3>
-      <p>Most of the work here went into finding out <b>where it stops working</b>, and
-        those limits are published rather than buried.</p>
-      <p>Four detectors were built, measured, and switched off because the measurement
-        said they did not work. One of them scored below chance after a repair. The
-        checks that ship are the ones that survived.</p>
-    </div>
-  </div>
-
-  <div class="mk-alert honest">
-    <div>
-      <b>What it will not do.</b> It does not catch AI-generated images from the pixels;
-      that only works when the file carries a signature, and one re-save removes it. It
-      misses a copied region smaller than about 1% of the frame, one blended with a heavy
-      feather, or one that was mirrored on its way in. Those numbers come from
-      deliberately trying to defeat it, and every one of them is written down.
+      <h3>Limits measured, not claimed</h3>
+      <p>Four detectors were built and switched off because measurement said they did
+        not work. <a href="/science">How it works, and where it fails</a>.</p>
     </div>
   </div>
 </section>
