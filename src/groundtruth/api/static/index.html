@@ -77,10 +77,15 @@
      touching the Example 2 divider. */
   section.block { padding-block: var(--mk-4) var(--mk-8); }
   section.ruled { border-top: var(--mk-border-w) solid var(--mk-line); }
+  /* The summary carries no rule, so it needs none of the clearance the ruled
+     sections do. On the shared padding it sat 56px off the sample row and 56px
+     off Example 1, which read as a gap rather than as a short aside between the
+     tool and the worked examples. */
+  section.brief { padding-block: var(--mk-2) var(--mk-4); }
   .eyebrow-row { margin: 0 0 var(--mk-5); }
   .strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--mk-5); }
   @media (max-width: 760px) { .strip { grid-template-columns: 1fr; } }
-  .frame { overflow: hidden; padding: 0; }
+  .frame { overflow: hidden; padding: 0; display: flex; flex-direction: column; }
   .frame .pic {
     background: var(--mk-surface-sunk);
     display: flex; align-items: center; justify-content: center;
@@ -130,8 +135,15 @@
      reads as a broken image rather than as a wide one. No aspect-ratio here: the
      box takes the height of what is in it. The three cards still line up, because
      the grid stretches them and only the split between picture and caption moves. */
+  /* The proof image is about 3.6:1 and the other two are 16/9, so it cannot fill
+     the same box. Left alone it made card 3 short at the top and left a ragged
+     71px of white under its caption, which reads worse than matting does. The
+     panel grows to take up the slack and the crops centre in it, so all three
+     picture areas line up and the extra space sits inside the image panel where
+     it looks deliberate. */
   .frame .pic.light {
     background: var(--mk-surface-2); aspect-ratio: auto; padding: var(--mk-4);
+    flex: 1;
   }
   .frame .pic.light img { object-fit: contain; height: auto; }
 
@@ -295,7 +307,7 @@
 
 <div class="results" id="results" hidden><div class="shell" id="out"></div></div>
 
-<section class="shell block">
+<section class="shell block brief">
   <p class="mk-eyebrow eyebrow-row">In short</p>
   <div class="purpose">
     <div>
@@ -341,12 +353,9 @@
       <div class="pic light"><img id="ex1-proof"
            alt="The two damaged areas cropped and placed side by side, appearing identical"></div>
       <div class="cap"><b>3. The proof, side by side</b>
-        <span><b>These two crops come from different places in the photograph, and they
-          are identical.</b> That is the finding, not a display fault. Each is labelled
-          with where it was taken from. <b id="ex1-proof-num">Measured, they differ 73&times;
-          less than two genuinely different parts of the same photograph.</b>
-          Two real dents never match like this, and a camera cannot photograph the same
-          damage twice in one frame.</span></div>
+        <span><b>Two different places in the photo, holding identical pixels.</b>
+          <span id="ex1-proof-num">Measured, they differ 73&times; less than two genuinely
+          different parts of the same image.</span> A camera cannot do that.</span></div>
     </div>
 
     </div>
@@ -496,7 +505,7 @@ loadExample('claim_car_damage_extended.jpg',
     if (p && p.ratio) {
       $('#ex1-proof-num').textContent =
         `Measured, they differ ${p.ratio}× less than two genuinely different parts ` +
-        `of the same photograph.`;
+        `of the same image.`;
     }
     return loadExample('claim_wall_crack_duplicated.jpg',
                        { before: '#ex2-before', changed: '#ex2-heat' });
