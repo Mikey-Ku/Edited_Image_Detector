@@ -188,6 +188,17 @@
     font-size: var(--mk-text-sm); font-weight: 600;
     border-bottom: var(--mk-border-w) solid var(--mk-line);
   }
+  /* Every other child of a card is inset by --mk-5. The tab strip and the region
+     table are collection components dropped straight in, and they carry their own
+     smaller cell padding, so without this the first tab label sits on the card's
+     rounded corner and the table hangs a step left of the heading above it. */
+  /* Three tabs already overflow 375px, and a fourth appears whenever the file
+     carries a recoverable preview. Scroll the strip rather than clip it: without
+     this the last view is drawn past the card's edge and cannot be reached. */
+  .mk-card > .mk-tabs { padding-inline: var(--mk-5); overflow-x: auto; scrollbar-width: none; }
+  .mk-card > .mk-tabs::-webkit-scrollbar { display: none; }
+  .mk-card .mk-table :is(th, td) { padding-inline: var(--mk-5); }
+  .mk-card .mk-table td { white-space: nowrap; }
   .plate { background: var(--mk-surface-sunk); display: flex; justify-content: center; padding: var(--mk-5); }
   .plate img { max-width: 100%; max-height: 460px; display: block; }
   .pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--mk-4); width: 100%; }
@@ -528,6 +539,27 @@ function finding(e) {
       <div class="mk-meter__fill" style="width:${Math.max(strength, 3)}%"></div></div></div>`;
 }
 
+/* Where a flagged box sits, in words a person can act on.
+
+   "(328, 702) to (474, 778)" is accurate and useless: nobody can find that
+   rectangle by looking at their own photograph, so the table it sat in was
+   decoration.
+
+   Fifths rather than thirds, because any grid splits neighbours at its
+   boundaries and thirds put the boundary in the worst place. On the car sample
+   the damaged strip breaks into blobs at 25% and 34% across, which thirds label
+   "left" and "centre" -- two names for one continuous edit, which reads as two
+   separate findings. Fifths group them, and the pairs that genuinely are far
+   apart (72% and 81%) still separate. */
+const BAND = ['Top', 'Upper', 'Middle', 'Lower', 'Bottom'];
+const SIDE = ['far left', 'left', 'centre', 'right', 'far right'];
+function place(bbox, size) {
+  const fifth = (v, n) => Math.min(4, Math.max(0, Math.floor(v / n * 5)));
+  const band = BAND[fifth((bbox[1] + bbox[3]) / 2, size[1])];
+  const side = SIDE[fifth((bbox[0] + bbox[2]) / 2, size[0])];
+  return band === 'Middle' && side === 'centre' ? 'Centre' : `${band} ${side}`;
+}
+
 function render(d) {
   const v = d.verdict, im = d.images || {}, rec = d.recovery;
   const [tone, title, sub] = CALL[v.decision];
@@ -559,14 +591,19 @@ function render(d) {
     <div class="split">
       <div class="mk-card">
         <div class="mk-tabs" role="tablist">${views.map(([k, l], i) =>
-          `<button class="mk-tab" role="tab" data-view="${k}" aria-selected="${i === 0}">${l}</button>`).join('')}</div>
+          `<button class="mk-tab" role="tab" data-view="${k}" aria-selected="${i === 0}">${l}</button>`).join('')
+          }<span class="mk-tabs__ind"></span></div>
         ${plates}
-        ${(d.regions || []).length ? `<div class="card-pad"><table class="mk-table">
-            <tr><th>Region</th><th>Share of image</th></tr>
-            ${d.regions.slice(0, 5).map(x => `<tr>
-              <td class="mk-mono">(${x.bbox[0]}, ${x.bbox[1]}) to (${x.bbox[2]}, ${x.bbox[3]})</td>
-              <td class="mk-mono">${(x.area_fraction * 100).toFixed(2)}%</td></tr>`).join('')}
-          </table></div>` : ''}
+        ${(d.regions || []).length ? `
+          <h3 class="card-title">Areas the checks pointed at</h3>
+          <div class="mk-table-wrap"><table class="mk-table">
+            <thead><tr><th>Where</th><th class="mk-table__num">Size</th>
+              <th class="mk-table__num">Share of image</th></tr></thead>
+            <tbody>${d.regions.slice(0, 5).map(x => `<tr>
+              <td>${place(x.bbox, d.size)}</td>
+              <td class="mk-table__num">${x.bbox[2] - x.bbox[0]}&times;${x.bbox[3] - x.bbox[1]} px</td>
+              <td class="mk-table__num">${(x.area_fraction * 100).toFixed(1)}%</td></tr>`).join('')}
+            </tbody></table></div>` : ''}
       </div>
 
       <div>
@@ -592,10 +629,22 @@ function render(d) {
     </div>`;
 
   results.hidden = false;
-  out.querySelectorAll('.mk-tab').forEach(t => t.onclick = () => {
-    out.querySelectorAll('.mk-tab').forEach(x => x.setAttribute('aria-selected', x === t));
+
+  /* The underline the collection ships with. Without it the only selected-state
+     signal is text colour, and three tabs a shade apart read as three links.
+     Measured after the panel is shown, since offsetWidth is 0 inside hidden. */
+  const ind = out.querySelector('.mk-tabs__ind');
+  const mark = t => {
+    ind.style.setProperty('--w', t.offsetWidth + 'px');
+    ind.style.setProperty('--x', t.offsetLeft + 'px');
+  };
+  const tabs = [...out.querySelectorAll('.mk-tab')];
+  tabs.forEach(t => t.onclick = () => {
+    tabs.forEach(x => x.setAttribute('aria-selected', x === t));
     out.querySelectorAll('.plate').forEach(p => p.hidden = p.dataset.view !== t.dataset.view);
+    mark(t);
   });
+  mark(tabs[0]);
 }
 </script>
 </body>

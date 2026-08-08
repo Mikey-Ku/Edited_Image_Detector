@@ -584,6 +584,12 @@ button, input, select, textarea {
 .mk-table tbody tr { transition: background-color var(--mk-dur) var(--mk-ease); }
 .mk-table tbody tr:hover { background: var(--mk-accent-soft); }
 .mk-table__num { text-align: right; font-family: var(--mk-font-mono); font-variant-numeric: tabular-nums; }
+/* A numeric column's heading is a label, not a figure. It needs the same right
+   alignment so it sits over its values, but not the mono face. Naming `th` is
+   required rather than tidy: `.mk-table th` is the more specific selector, so
+   the class alone loses and the heading stays left while the column under it
+   runs right, which reads as a broken table. */
+.mk-table th.mk-table__num { text-align: right; font-family: inherit; }
 .mk-table-wrap { overflow-x: auto; }
 
 /* ---------- Tabs ---------- */
