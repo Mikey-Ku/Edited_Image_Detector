@@ -38,10 +38,10 @@
 
   /* ---------- header ---------- */
   header { border-bottom: var(--mk-border-w) solid var(--mk-line); }
-  .head { display: flex; align-items: center; gap: var(--mk-3); height: 64px; }
+  .head { display: flex; align-items: center; gap: var(--mk-3); height: 72px; }
   .logo {
     font-family: var(--mk-font-display);
-    font-size: var(--mk-text-lg);
+    font-size: var(--mk-text-2xl);
     font-weight: 600;
     letter-spacing: var(--mk-display-track);
   }
@@ -49,7 +49,7 @@
   .head nav { margin-left: auto; }
 
   /* ---------- hero ---------- */
-  .hero { padding: var(--mk-10) 0 var(--mk-6); }
+  .hero { padding-block: var(--mk-8) var(--mk-5); }
   h1 {
     margin: 0 0 var(--mk-4);
     font-family: var(--mk-font-display);
@@ -62,11 +62,11 @@
     font-weight: 600;
     max-width: 30ch;
   }
-  .lede { margin: 0; font-size: var(--mk-text-lg); color: var(--mk-text-muted); max-width: 62ch; }
+  .lede { margin: 0; font-size: var(--mk-text-lg); color: var(--mk-text-muted); max-width: 78ch; }
   .lede b { color: var(--mk-text); font-weight: 550; }
 
   /* ---------- worked example ---------- */
-  section.block { padding: var(--mk-8) 0; }
+  section.block { padding-block: var(--mk-7); }
   section.ruled { border-top: var(--mk-border-w) solid var(--mk-line); }
   .eyebrow-row { margin: 0 0 var(--mk-5); }
   .strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--mk-5); }
@@ -82,7 +82,7 @@
   .frame .cap b { display: block; font-size: var(--mk-text-sm); font-weight: 580; margin-bottom: 2px; }
   .frame .cap span { font-size: var(--mk-text-sm); color: var(--mk-text-muted); }
   .aside {
-    margin: var(--mk-5) 0 0; max-width: 74ch;
+    margin: var(--mk-5) 0 0; max-width: 78ch;
     font-size: var(--mk-text-sm); color: var(--mk-text-muted);
   }
   .aside b, .intro b { color: var(--mk-text); font-weight: 560; }
@@ -106,14 +106,10 @@
   .honest b { color: var(--mk-text); font-weight: 560; }
   .lede.sub { margin-top: var(--mk-3); font-size: var(--mk-text-base); }
   .intro {
-    margin: 0 0 var(--mk-5); max-width: 74ch;
+    margin: 0 0 var(--mk-5); max-width: 78ch;
     font-size: var(--mk-text-base); color: var(--mk-text-muted);
   }
 
-  /* Four panels read better two-up than squeezed into one row: the proof panel is
-     the point of the example and needs the width to be legible. */
-  .quad { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--mk-5); }
-  @media (max-width: 760px) { .quad { grid-template-columns: 1fr; } }
   .frame .pic.light { background: var(--mk-surface-2); }
   .frame .pic.light img { object-fit: contain; }
 
@@ -144,13 +140,16 @@
     letter-spacing: var(--mk-display-track);
     font-weight: 600;
   }
-  .upload .lede { margin-bottom: var(--mk-6); font-size: var(--mk-text-base); }
+  .upload { padding-block: var(--mk-2) var(--mk-7); }
+  .tool-note {
+    margin: 0 0 var(--mk-4); font-size: var(--mk-text-sm); color: var(--mk-text-faint);
+  }
   .mk-drop b { display: block; font-size: var(--mk-text-base); font-weight: 560; color: var(--mk-text); }
   .mk-drop.is-over b { color: inherit; }
 
-  .tries { display: flex; align-items: center; gap: var(--mk-2); flex-wrap: wrap; margin-top: var(--mk-4); }
+  .tries { display: flex; align-items: center; gap: var(--mk-2); flex-wrap: wrap; margin-top: var(--mk-3); }
   .tries > span { font-size: var(--mk-text-sm); color: var(--mk-text-faint); }
-  .tries > span.break { flex-basis: 100%; margin-top: var(--mk-2); }
+  .tries > span.break { flex-basis: 100%; margin-top: var(--mk-1); }
   .try { border-radius: var(--mk-radius-full); }
   .try.real { border-style: dashed; }
 
@@ -232,6 +231,29 @@
     Built for insurance claims, where a photograph decides a payout.</p>
 </section>
 
+<section class="shell block upload">
+  <p class="lede tool-note">Nothing is sent anywhere else. The analysis runs on this machine.</p>
+
+  <div class="mk-drop" id="drop" role="button" tabindex="0" aria-label="Choose an image to check">
+    <b>Drop an image here, or click to choose a file</b>
+    <span class="mk-hint">JPEG, PNG, WebP, TIFF, HEIC or BMP</span>
+    <input type="file" id="file" accept="image/*,.heic,.heif,.tif,.tiff" hidden>
+  </div>
+
+  <div class="tries" id="tries"></div>
+
+
+
+  <div class="prog" id="prog" hidden>
+    <div class="mk-meter"><div class="mk-meter__fill" id="progFill" style="width:0"></div></div>
+    <p class="prog-label" id="progLabel"></p>
+  </div>
+
+  <div id="err"></div>
+</section>
+
+<div class="results" id="results" hidden><div class="shell" id="out"></div></div>
+
 <section class="shell block">
   <p class="mk-eyebrow eyebrow-row">In short</p>
   <div class="purpose">
@@ -260,7 +282,7 @@
     surface over a scratch. Retrace catches this by finding two areas of one photo that
     are the same area twice.</p>
 
-  <div class="quad">
+  <div class="strip">
     <div class="mk-card frame">
       <div class="pic"><img src="/samples/claim_car_damage_extended.jpg"
            alt="A damaged car door, photographed for an insurance claim"></div>
@@ -284,12 +306,7 @@
           Two real dents are never identical. A camera cannot photograph the same damage
           twice in one frame.</span></div>
     </div>
-    <div class="mk-card frame">
-      <div class="pic"><img id="ex1-heat" alt="A black image with the two duplicated areas glowing"></div>
-      <div class="cap"><b>4. The machine's own view</b>
-        <span>How suspicious each part of the photo is. <b>Black is fine, orange and white
-          are suspicious.</b> Two bright patches, because a copy always leaves two marks:
-          where it came from and where it went.</span></div>
+
     </div>
   </div>
 
@@ -342,29 +359,6 @@
 
 
 
-<section class="shell block ruled upload">
-  <h2>Check your own image</h2>
-  <p class="lede">Nothing is sent anywhere else. The analysis runs on this machine.</p>
-
-  <div class="mk-drop" id="drop" role="button" tabindex="0" aria-label="Choose an image to check">
-    <b>Drop an image here, or click to choose a file</b>
-    <span class="mk-hint">JPEG, PNG, WebP, TIFF, HEIC or BMP</span>
-    <input type="file" id="file" accept="image/*,.heic,.heif,.tif,.tiff" hidden>
-  </div>
-
-  <div class="tries" id="tries"></div>
-
-
-
-  <div class="prog" id="prog" hidden>
-    <div class="mk-meter"><div class="mk-meter__fill" id="progFill" style="width:0"></div></div>
-    <p class="prog-label" id="progLabel"></p>
-  </div>
-
-  <div id="err"></div>
-</section>
-
-<div class="results" id="results" hidden><div class="shell" id="out"></div></div>
 
 <footer><div class="shell"><p>Retrace reports what it can measure and says plainly when it
   cannot. A result is evidence for a human decision, not the decision itself.</p></div></footer>
@@ -431,12 +425,9 @@ fetch('/api/samples').then(r => r.json()).then(list => {
       box.appendChild(b);
     }
   };
-  add('Real photo, faked by copying part of it. Caught from the image alone:',
-      list.filter(s => s.group === 'single'), '');
-  add('Small images I made by hand, each one built to trigger a single check:',
-      list.filter(s => s.group === 'synthetic'), '');
-  add('Real photographs, edited by hand. Includes ones it gets wrong:',
-      list.filter(s => s.group === 'real'), 'real');
+  add('No image to hand? Try one:', list.filter(s => s.group === 'single'), '');
+  add('Built to trigger one check each:', list.filter(s => s.group === 'synthetic'), '');
+  add('Real photos, including ones it gets wrong:', list.filter(s => s.group === 'real'), 'real');
 }).catch(() => {});
 
 /* Both worked examples show real output rather than a mockup of it. The panels are
@@ -458,7 +449,7 @@ function loadExample(sample, panels) {
 /* Sequential rather than parallel: each analysis is CPU-bound, and firing both at
    once made the first panel noticeably slower to appear. */
 loadExample('claim_car_damage_extended.jpg',
-            { overlay: '#ex1-overlay', heatmap: '#ex1-heat', proof: '#ex1-proof' })
+            { overlay: '#ex1-overlay', proof: '#ex1-proof' })
   .then(d => {
     /* The multiple in the caption is measured on this run rather than typed into the
        HTML, so the sentence cannot quietly stop matching the picture beside it. */

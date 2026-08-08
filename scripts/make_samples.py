@@ -58,10 +58,28 @@ def with_stale_preview(original: Image.Image, edited: Image.Image, out: Path) ->
     """
     import piexif
 
-    thumb = original.copy()
-    thumb.thumbnail((320, 320))
+    # As large as the format allows, rather than a 320px postage stamp. Both are
+    # realistic, since cameras and editors embed previews at a wide range of sizes,
+    # but at 320 the recovered original renders visibly mushier than the submitted
+    # photo beside it, and that reads as a bug in the tool rather than as a property
+    # of the evidence.
+    #
+    # EXIF caps the thumbnail at 64 kB, so step down until it fits instead of picking
+    # a size that happens to work for one photograph and breaks on the next.
     tb = io.BytesIO()
-    thumb.save(tb, "JPEG", quality=70)
+    for edge in (1024, 800, 640, 512, 400, 320):
+        for quality in (88, 80, 70):
+            buf = io.BytesIO()
+            thumb = original.copy()
+            thumb.thumbnail((edge, edge))
+            thumb.save(buf, "JPEG", quality=quality)
+            if buf.tell() < 63_000:
+                tb = buf
+                break
+        if tb.tell():
+            break
+    if not tb.tell():
+        raise RuntimeError("could not fit a thumbnail under the 64 kB EXIF limit")
 
     mb = io.BytesIO()
     edited.save(mb, "JPEG", quality=92, subsampling=0)
