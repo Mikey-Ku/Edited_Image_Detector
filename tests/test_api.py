@@ -207,6 +207,53 @@ def test_stylesheet_is_served(client):
 
 
 # --------------------------------------------------------------------------
+# Naming a position in the frame
+# --------------------------------------------------------------------------
+
+
+def test_adjacent_blobs_of_one_edit_get_one_name():
+    """The reason this uses fifths rather than thirds.
+
+    On the car sample the damaged strip breaks into two blobs whose centres sit at
+    25% and 34% across the frame. Thirds put a boundary at 33%, so they came out
+    "left" and "centre": two names for one continuous edit, which reads in the
+    table as two separate findings.
+    """
+    from groundtruth.fusion.localisation import describe_position
+
+    shape = (1200, 1600)
+    a = describe_position([328, 702, 474, 778], shape)
+    b = describe_position([494, 705, 601, 778], shape)
+    assert a == b, f"one edit named two ways: {a!r} and {b!r}"
+
+
+def test_genuinely_distant_regions_still_separate():
+    """Grouping neighbours must not collapse everything into one label."""
+    from groundtruth.fusion.localisation import describe_position
+
+    shape = (1200, 1600)
+    assert describe_position([328, 702, 474, 778], shape) != describe_position(
+        [1078, 722, 1224, 798], shape
+    )
+
+
+def test_the_middle_of_the_frame_is_just_centre():
+    """"Middle centre" is not something a person says."""
+    from groundtruth.fusion.localisation import describe_position
+
+    assert describe_position([780, 580, 820, 620], (1200, 1600)) == "Centre"
+
+
+def test_position_names_survive_the_frame_edges():
+    """floor(v/n*5) hits 5 exactly at the far edge, which would index off the end."""
+    from groundtruth.fusion.localisation import describe_position
+
+    shape = (1200, 1600)
+    assert describe_position([0, 0, 0, 0], shape) == "Top far left"
+    assert describe_position([1600, 1200, 1600, 1200], shape) == "Bottom far right"
+
+
+# --------------------------------------------------------------------------
 # The proof panel
 # --------------------------------------------------------------------------
 
@@ -239,3 +286,21 @@ def test_proof_panel_reports_a_ratio_worth_believing(client):
     assert proof is not None, "a staged clone should produce a proof panel"
     assert proof["ratio"] >= 3.0
     assert proof["pair_difference"] < proof["control_difference"]
+
+
+def test_the_proof_panel_says_where_each_crop_came_from(client):
+    """Two crops that look the same read as a failed image load, not as evidence.
+
+    The whole argument is that these are *different places* holding *identical
+    pixels*, and without the labels only the second half of that is visible. They
+    also have to differ: labelling both crops the same place would restate the
+    confusion rather than resolve it.
+    """
+    from groundtruth.api.server import _SAMPLES
+
+    name = "claim_car_damage_extended.jpg"
+    if not (_SAMPLES / name).is_file():
+        pytest.skip("sample not present")
+    proof = client.post("/api/analyse", data={"sample": name}).json()["proof"]
+    assert proof["where_a"] and proof["where_b"]
+    assert proof["where_a"] != proof["where_b"], "both crops labelled the same place"

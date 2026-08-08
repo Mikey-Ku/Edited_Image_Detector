@@ -68,6 +68,35 @@ def fuse_heatmaps(
     return np.clip(pooled, 0.0, 1.0), contributors
 
 
+_BAND = ("Top", "Upper", "Middle", "Lower", "Bottom")
+_SIDE = ("far left", "left", "centre", "right", "far right")
+
+
+def describe_position(bbox: list[int] | tuple[int, ...], shape: tuple[int, int]) -> str:
+    """Name where a box sits in the frame, in words a person can act on.
+
+    "(328, 702) to (474, 778)" is accurate and useless: nobody can find that
+    rectangle by looking at their own photograph, so a table of them is decoration.
+
+    Fifths rather than thirds. Any grid splits neighbours at its boundaries, and
+    thirds put the boundary in the worst place: on the car sample the damaged strip
+    breaks into blobs at 25% and 34% across the frame, which thirds label "left" and
+    "centre", giving two names to one continuous edit. Fifths group those and still
+    separate the pair that really is far apart, at 72% and 81%.
+
+    Lives here rather than in the page's JavaScript so the rendered proof panel and
+    the region table cannot drift into naming the same place differently.
+    """
+    h, w = shape
+
+    def fifth(v: float, n: int) -> int:
+        return min(4, max(0, int(v / max(n, 1) * 5)))
+
+    band = _BAND[fifth((bbox[1] + bbox[3]) / 2, h)]
+    side = _SIDE[fifth((bbox[0] + bbox[2]) / 2, w)]
+    return "Centre" if band == "Middle" and side == "centre" else f"{band} {side}"
+
+
 def peak_regions(
     heat: np.ndarray, threshold: float = 0.5, min_area: int = 64
 ) -> list[dict]:
@@ -104,9 +133,11 @@ def peak_regions(
                 continue
             ys = [p[0] for p in pts]
             xs = [p[1] for p in pts]
+            bbox = [min(xs), min(ys), max(xs), max(ys)]
             regions.append(
                 {
-                    "bbox": [min(xs), min(ys), max(xs), max(ys)],
+                    "bbox": bbox,
+                    "where": describe_position(bbox, (h, w)),
                     "area_px": len(pts),
                     "area_fraction": round(len(pts) / (h * w), 5),
                     "peak": round(float(heat[mask & seen].max()), 3),

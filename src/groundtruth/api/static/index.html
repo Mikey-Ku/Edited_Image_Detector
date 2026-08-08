@@ -66,11 +66,16 @@
   .lede b { color: var(--mk-text); font-weight: 550; }
 
   /* ---------- worked example ---------- */
-  /* No padding rule here on purpose. This said `padding-block: var(--mk-7)`, and
-     mk-ui's scale runs 1-6, 8, 10, 12, 16, so --mk-7 does not exist: the
-     declaration was invalid and computed to zero for the whole of the layout
-     work. The section rhythm you see, about 40px, comes from .eyebrow-row's
-     margin. Adding real padding back here would roughly triple every gap. */
+  /* Asymmetric on purpose. This said `padding-block: var(--mk-7)`, and mk-ui's
+     scale runs 1-6, 8, 10, 12, 16, so --mk-7 does not exist: the declaration was
+     invalid and computed to zero on both edges for the whole of the layout work.
+
+     The top stays small because the eyebrow's own margin already spaces a section
+     from what precedes it, and restoring a full pad there doubles every gap. The
+     bottom was the real casualty: at zero, a section's last element sat flush on
+     the next section's rule, so the "check the real photo" panel had its border
+     touching the Example 2 divider. */
+  section.block { padding-block: var(--mk-4) var(--mk-8); }
   section.ruled { border-top: var(--mk-border-w) solid var(--mk-line); }
   .eyebrow-row { margin: 0 0 var(--mk-5); }
   .strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--mk-5); }
@@ -83,7 +88,13 @@
   }
   .frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .frame .cap { padding: var(--mk-3) var(--mk-4); border-top: var(--mk-border-w) solid var(--mk-line); }
-  .frame .cap b { display: block; font-size: var(--mk-text-sm); font-weight: 580; margin-bottom: 2px; }
+  /* Only the card's own title is a block. This was `.frame .cap b`, which caught
+     every bold word in the body too, so "It marked <b>two</b> areas of bodywork"
+     rendered as three stacked lines with "two" alone in the middle. */
+  .frame .cap > b:first-child {
+    display: block; font-size: var(--mk-text-sm); font-weight: 580; margin-bottom: 2px;
+  }
+  .frame .cap span b { font-weight: 580; color: var(--mk-text); }
   .frame .cap span { font-size: var(--mk-text-sm); color: var(--mk-text-muted); }
   .aside {
     margin: var(--mk-5) 0 0; max-width: 78ch;
@@ -114,8 +125,15 @@
     font-size: var(--mk-text-base); color: var(--mk-text-muted);
   }
 
-  .frame .pic.light { background: var(--mk-surface-2); }
-  .frame .pic.light img { object-fit: contain; }
+  /* The proof panel holds two crops side by side, so it comes out around 3.6:1.
+     Forced into the strip's 16/9 box it sat in 101px of empty background, which
+     reads as a broken image rather than as a wide one. No aspect-ratio here: the
+     box takes the height of what is in it. The three cards still line up, because
+     the grid stretches them and only the split between picture and caption moves. */
+  .frame .pic.light {
+    background: var(--mk-surface-2); aspect-ratio: auto; padding: var(--mk-4);
+  }
+  .frame .pic.light img { object-fit: contain; height: auto; }
 
   /* "Check its work": collapsed by default so the example still reads as one image
      in, one answer out, but a sceptical visitor can verify rather than trust. */
@@ -124,9 +142,13 @@
     cursor: pointer; font-size: var(--mk-text-sm); font-weight: 550;
     color: var(--mk-accent);
   }
+  /* A capped image column, and text aligned to its top rather than its middle.
+     At an even 1fr split the photograph came out 357px tall, and four lines of
+     caption centred against it left about 130px of dead space above and below
+     the words, which read as a layout fault rather than as breathing room. */
   .reveal-body {
-    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: var(--mk-5); align-items: center; margin-top: var(--mk-4);
+    display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+    gap: var(--mk-5); align-items: start; margin-top: var(--mk-4);
     padding: var(--mk-5); border: var(--mk-border-w) solid var(--mk-line);
     border-radius: var(--mk-radius); background: var(--mk-surface-2);
   }
@@ -146,9 +168,11 @@
   }
   /* --mk-8, not the --mk-7 this used to name, which does not exist and so voided
      the whole declaration. With three rows of sample buttons the missing gap was
-     hidden; at one row the next section sat 8px under the buttons. 32px here puts
-     it at 40, matching every other section break on the page. */
-  .upload { padding-block: var(--mk-2) var(--mk-8); }
+     hidden; at one row the next section sat 8px under the buttons.
+
+     `section.upload` rather than `.upload`, because `section.block` above is the
+     more specific selector and would otherwise win no matter which came last. */
+  section.upload { padding-block: var(--mk-2) var(--mk-8); }
   .tool-note {
     margin: 0 0 var(--mk-4); font-size: var(--mk-text-sm); color: var(--mk-text-faint);
   }
@@ -317,11 +341,12 @@
       <div class="pic light"><img id="ex1-proof"
            alt="The two damaged areas cropped and placed side by side, appearing identical"></div>
       <div class="cap"><b>3. The proof, side by side</b>
-        <span>The two areas, cut out and zoomed. Every crease and highlight matches,
-          because one <em>is</em> the other. <b id="ex1-proof-num">Measured, they differ 73&times;
+        <span><b>These two crops come from different places in the photograph, and they
+          are identical.</b> That is the finding, not a display fault. Each is labelled
+          with where it was taken from. <b id="ex1-proof-num">Measured, they differ 73&times;
           less than two genuinely different parts of the same photograph.</b>
-          Two real dents are never identical. A camera cannot photograph the same damage
-          twice in one frame.</span></div>
+          Two real dents never match like this, and a camera cannot photograph the same
+          damage twice in one frame.</span></div>
     </div>
 
     </div>
@@ -331,9 +356,10 @@
     <summary>Was it actually right? Show me the real photo</summary>
     <div class="reveal-body">
       <img src="/samples/claim_car_original.jpg" alt="The same car with only the front door damaged">
-      <p><b>In the genuine photograph only the front door is crumpled.</b> The rear panel damage was pasted in.
-        <b>Retrace never saw this image</b>, it worked entirely from the edited one. This
-        is here so you can mark its homework rather than take our word for it.</p>
+      <p><b>In the genuine photograph only the front door is crumpled.</b> The rear panel
+        damage was pasted in. <b>Retrace never saw this image</b>; it worked entirely from
+        the edited one. It is shown here so the finding can be checked rather than taken
+        on trust.</p>
     </div>
   </details>
 </section>
@@ -367,11 +393,10 @@
     </div>
   </div>
 
-  <p class="aside"><b>This one is luck, not skill, and it is worth being clear about that.</b>
-    It only works when the editor forgot the thumbnail. Most files carry no usable copy, and
-    across the 224 photographs Retrace is scored on, this shortcut was available
-    <b>zero times</b>. None of its measured accuracy comes from it. Example 1 is how it
-    normally has to work.</p>
+  <p class="aside"><b>This route depends on the editor's mistake, not on detection.</b>
+    It works only when the file still carries a preview of the original, and most do not.
+    Across the 224 photographs Retrace is scored on it was available <b>zero times</b>,
+    so none of the reported accuracy comes from it. Example 1 is the normal path.</p>
 </section>
 
 
@@ -542,27 +567,6 @@ function finding(e) {
       <div class="mk-meter__fill" style="width:${Math.max(strength, 3)}%"></div></div></div>`;
 }
 
-/* Where a flagged box sits, in words a person can act on.
-
-   "(328, 702) to (474, 778)" is accurate and useless: nobody can find that
-   rectangle by looking at their own photograph, so the table it sat in was
-   decoration.
-
-   Fifths rather than thirds, because any grid splits neighbours at its
-   boundaries and thirds put the boundary in the worst place. On the car sample
-   the damaged strip breaks into blobs at 25% and 34% across, which thirds label
-   "left" and "centre" -- two names for one continuous edit, which reads as two
-   separate findings. Fifths group them, and the pairs that genuinely are far
-   apart (72% and 81%) still separate. */
-const BAND = ['Top', 'Upper', 'Middle', 'Lower', 'Bottom'];
-const SIDE = ['far left', 'left', 'centre', 'right', 'far right'];
-function place(bbox, size) {
-  const fifth = (v, n) => Math.min(4, Math.max(0, Math.floor(v / n * 5)));
-  const band = BAND[fifth((bbox[1] + bbox[3]) / 2, size[1])];
-  const side = SIDE[fifth((bbox[0] + bbox[2]) / 2, size[0])];
-  return band === 'Middle' && side === 'centre' ? 'Centre' : `${band} ${side}`;
-}
-
 function render(d) {
   const v = d.verdict, im = d.images || {}, rec = d.recovery;
   const [tone, title, sub] = CALL[v.decision];
@@ -603,7 +607,7 @@ function render(d) {
             <thead><tr><th>Where</th><th class="mk-table__num">Size</th>
               <th class="mk-table__num">Share of image</th></tr></thead>
             <tbody>${d.regions.slice(0, 5).map(x => `<tr>
-              <td>${place(x.bbox, d.size)}</td>
+              <td>${esc(x.where || '')}</td>
               <td class="mk-table__num">${x.bbox[2] - x.bbox[0]}&times;${x.bbox[3] - x.bbox[1]} px</td>
               <td class="mk-table__num">${(x.area_fraction * 100).toFixed(1)}%</td></tr>`).join('')}
             </tbody></table></div>` : ''}

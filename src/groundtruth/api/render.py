@@ -10,10 +10,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from ..core.types import Verdict
-from ..fusion.localisation import peak_regions
+from ..fusion.localisation import describe_position, peak_regions
 
 # Black -> deep red -> orange -> yellow -> white. Monotonic in luminance so it
 # still reads correctly in greyscale or for a colourblind viewer.
@@ -99,20 +99,25 @@ def duplicate_pair(
         # recoverable, and does not matter for showing they are the same pixels.
         r = max(regions, key=lambda r: r.get("area_px", 0))
         x0, y0, x1, y1 = (int(v) for v in r["bbox"])
-        a = crop_box(x0, y0, x1, y1)
-        b = crop_box(x0 + dx, y0 + dy, x1 + dx, y1 + dy)
+        box_a = (x0, y0, x1, y1)
+        box_b = (x0 + dx, y0 + dy, x1 + dx, y1 + dy)
+        a = crop_box(*box_a)
+        b = crop_box(*box_b)
         if a is None or b is None:
             # The partner falls outside the frame, so try the other direction.
-            a = crop_box(x0 - dx, y0 - dy, x1 - dx, y1 - dy)
-            b = crop_box(x0, y0, x1, y1)
+            box_a, box_b = (x0 - dx, y0 - dy, x1 - dx, y1 - dy), (x0, y0, x1, y1)
+            a = crop_box(*box_a)
+            b = crop_box(*box_b)
             if a is None or b is None:
                 return None
     else:
         if len(regions) < 2:
             return None
         top = sorted(regions, key=lambda r: -r.get("peak", 0))[:2]
-        a = crop_box(*top[0]["bbox"])
-        b = crop_box(*top[1]["bbox"])
+        box_a = tuple(int(v) for v in top[0]["bbox"])
+        box_b = tuple(int(v) for v in top[1]["bbox"])
+        a = crop_box(*box_a)
+        b = crop_box(*box_b)
         if a is None or b is None:
             return None
 
@@ -159,11 +164,29 @@ def duplicate_pair(
         else float("nan")
     )
 
+    # Label each crop with where in the frame it came from. Without this the panel
+    # is two pictures that look the same, which reads as a failed image load rather
+    # than as the finding. The whole argument is that these are *different places*
+    # holding *identical pixels*, and only the first half of that is visible.
+    where_a = describe_position(box_a, (h, w))
+    where_b = describe_position(box_b, (h, w))
+
     left = Image.fromarray(a).resize((cw * zoom, ch * zoom), Image.NEAREST)
     right = Image.fromarray(b).resize((cw * zoom, ch * zoom), Image.NEAREST)
-    canvas = Image.new("RGB", (cw * zoom * 2 + gap, ch * zoom), (245, 246, 245))
+
+    # The panel is displayed about half its natural size, so PIL's 11px default
+    # font lands at roughly five pixels on screen and cannot be read. Size the
+    # label to the panel instead of picking a constant that happens to work here.
+    bar = max(_BAR, (cw * zoom * 2 + gap) // 22)
+    font = ImageFont.load_default(size=max(13, int(bar * 0.62)))
+
+    canvas = Image.new("RGB", (cw * zoom * 2 + gap, ch * zoom + bar), (245, 246, 245))
     canvas.paste(left, (0, 0))
     canvas.paste(right, (cw * zoom + gap, 0))
+    draw = ImageDraw.Draw(canvas)
+    for text, x in ((where_a, 0), (where_b, cw * zoom + gap)):
+        draw.text((x + 2, ch * zoom + bar * 0.18), text.upper(), font=font,
+                  fill=(90, 92, 96))
 
     ratio = round(control_diff / pair_diff, 1) if pair_diff > 0.01 else None
 
@@ -178,6 +201,8 @@ def duplicate_pair(
         "pair_difference": round(pair_diff, 2),
         "control_difference": round(control_diff, 2),
         "ratio": ratio,
+        "where_a": where_a,
+        "where_b": where_b,
     }
 
 
