@@ -357,18 +357,3 @@ Questions that cost 28 minutes do not get asked.
 
 The Korus dataset is **educational and research use only** and is not redistributed
 here, `scripts/salvage_zip.py` recovers it from the published archive.
-
-## Next
-
-1. **Per-camera calibration data.** The calibration itself is built and measured
-   (above): it works within a sensor and does not transfer across one. What is
-   missing is not a better fit but labelled forgeries from more camera models, enough to test whether slope tracks something predictable, like sensor
-   generation or read-noise level, in which case a calibrator could be *chosen*
-   from EXIF rather than fitted per camera. Two sensors cannot answer that.
-2. **Splicing** (`splice_in`, 0%), the synthetic benchmark splices between photos
-   from the same camera model, which share a noise level function. Cross-camera
-   donors would be the honest harder test.
-3. **Removal by fill** (`inpaint_out`, 0%), needs the "too smooth" side, which is
-   the mirror of the sharpness cue and currently unbuilt.
-4. A JPEG corpus for the compression tier, which remains unvalidated on real data. Every Korus image is a TIFF, so `compression.ela` and `metadata.container_identity`
-   have never been exercised on data that could falsify them.
