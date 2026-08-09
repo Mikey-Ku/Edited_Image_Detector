@@ -332,10 +332,15 @@ docs/DESIGN.md      architecture, evaluation protocol, results
 src/groundtruth/
   core/             types, detector interface, registry, container IO
   detectors/        metadata · compression · sensor · geometric · provenance · context
+  learned/          noiseprint fingerprint extraction, and the training run that failed
   recovery/         embedded previews, pre-edit reconstruction
   fusion/           weighted combination, abstention, calibration, heatmap pooling
+  pipeline/         runs every detector over one image, pools the heatmaps
+  benchmark/        staged manipulations and the detection-envelope matrix
   api/              CLI, overlay rendering, review UI
-scripts/            dataset salvage and evaluation
+scripts/            dataset salvage, evaluation, and the sweeps that killed ideas
+samples/            demo images, all staged; see samples/README.md before reusing
+vendor/             the noiseprint authors' reference net, for provenance only
 tests/fixtures.py   synthetic manipulations with ground-truth masks
 ```
 

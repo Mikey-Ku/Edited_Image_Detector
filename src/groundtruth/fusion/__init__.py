@@ -1,4 +1,4 @@
-from .localisation import fuse_heatmaps, peak_regions
+from .localisation import describe_position, fuse_heatmaps, peak_regions
 from .weighted import fuse
 
-__all__ = ["fuse", "fuse_heatmaps", "peak_regions"]
+__all__ = ["describe_position", "fuse", "fuse_heatmaps", "peak_regions"]
