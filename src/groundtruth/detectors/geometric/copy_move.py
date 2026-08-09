@@ -194,10 +194,12 @@ class CopyMoveDetector(Detector):
             score=float(min(0.95, 0.68 + 0.012 * len(members))),
             confidence=confidence,
             effect_size=float(min(1.0, len(members) / 40.0)),
+            # Reads on screen, so no double dash: this string is shown verbatim to
+            # whoever is reviewing the claim, not just written to a log.
             explanation=(
+                f"a region of this image appears twice. "
                 f"{len(members)} keypoint pairs share a single displacement of "
-                f"({offset[0]:.0f}, {offset[1]:.0f}) px -- a region of this image "
-                f"appears twice"
+                f"({offset[0]:.0f}, {offset[1]:.0f}) px"
             ),
             heatmap=heat,
             details=details,
