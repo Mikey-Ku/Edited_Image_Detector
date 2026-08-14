@@ -26,3 +26,6 @@ data/processed/*
 
 # local tooling
 .claude/
+
+# Byproduct of running uv in a repo that installs with pip.
+uv.lock
