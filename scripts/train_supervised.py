@@ -64,6 +64,33 @@ def casia_items() -> list[tuple[Path, int]]:
     return auth + tamp
 
 
+def mask_box(path: Path, w: int, h: int) -> tuple[int, int] | None:
+    """Top-left of a crop that actually contains the forgery.
+
+    Without this the control is being trained on noise. The median CASIA forgery
+    covers 5.7% of its frame and 67% of them cover under 10%, so a random 224 crop
+    of a 384x256 image usually contains no tampering at all while still carrying
+    the label "tampered". The first version of this script did exactly that and
+    plateaued at 0.667, below the 0.708 a classifier reaches from image dimensions
+    alone. That is a broken control, not a finding.
+
+    The mask is training-time ground truth that ships with the dataset. Using it to
+    choose a crop is not leakage: nothing at evaluation time sees a mask, and Korus
+    is scored by tiling with no mask at all.
+    """
+    mp = path.parent / path.name.replace(".png", ".mask.png")
+    if not mp.exists():
+        return None
+    m = np.asarray(Image.open(mp).convert("L")) > 127
+    ys, xs = np.nonzero(m)
+    if len(xs) == 0:
+        return None
+    cx, cy = int(np.random.choice(xs)), int(np.random.choice(ys))
+    x = int(np.clip(cx - CROP // 2, 0, max(0, w - CROP)))
+    y = int(np.clip(cy - CROP // 2, 0, max(0, h - CROP)))
+    return x, y
+
+
 class CasiaCrops(Dataset):
     def __init__(self, items: list[tuple[Path, int]], train: bool):
         self.items, self.train = items, train
@@ -81,8 +108,12 @@ class CasiaCrops(Dataset):
             canvas.paste(im, (0, 0))
             im = canvas
         if self.train:
-            x = random.randint(0, im.width - CROP)
-            y = random.randint(0, im.height - CROP)
+            spot = mask_box(path, im.width, im.height) if label == 1 else None
+            if spot is None:
+                x = random.randint(0, im.width - CROP)
+                y = random.randint(0, im.height - CROP)
+            else:
+                x, y = spot
             im = im.crop((x, y, x + CROP, y + CROP))
             if random.random() < 0.5:
                 im = im.transpose(Image.FLIP_LEFT_RIGHT)
@@ -192,8 +223,22 @@ def main() -> int:
         print(f"epoch {epoch:>2}  loss {tot/max(seen,1):.4f}   "
               f"CASIA held-out AUC {a:.4f}   ({time.time()-started:.0f}s)", flush=True)
 
-    casia_auc = a
-    print(f"\n5.1 (>= 0.95 in-distribution): {casia_auc:.4f} -> "
+    # The reported in-distribution number is scored the same way Korus is: tiled at
+    # native resolution, max over tiles. Center-crop is fine for watching training
+    # but it would compare a centre crop of CASIA against a tiled sweep of Korus,
+    # and half of any gap between them would just be the two framings.
+    print("\nrescoring CASIA held-out, tiled, to match the Korus framing...")
+    cy, cmax = [], []
+    for path, label in test:
+        r = score_tiled(model, path, dev)
+        if r is None:
+            continue
+        cy.append(label)
+        cmax.append(r[0])
+    casia_auc = auc(np.array(cy), np.array(cmax))
+    print(f"CASIA held-out ({len(cy)} images)  AUC tiled {casia_auc:.4f}   "
+          f"(centre-crop was {a:.4f})")
+    print(f"5.1 (>= 0.95 in-distribution): {casia_auc:.4f} -> "
           f"{'HIT' if casia_auc >= 0.95 else 'MISS'}")
 
     print("\nscoring Korus, tiled at native resolution...")
@@ -219,7 +264,8 @@ def main() -> int:
           f"{'HIT' if worst <= 0.70 else 'MISS'}")
 
     OUT.write_text(json.dumps({
-        "casia_heldout_auc": casia_auc,
+        "casia_heldout_auc_tiled": casia_auc,
+        "casia_heldout_auc_centre_crop": float(a),
         "korus_auc_max_tile": korus_max,
         "korus_auc_mean_tile": korus_mean,
         "n_korus": len(ky),
