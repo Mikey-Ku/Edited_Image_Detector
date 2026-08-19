@@ -221,9 +221,46 @@ This does not indict the dataset for the use it is put to here. CASIA is the
 training set, and a model that learns a resolution prior from it will simply not
 find that prior on Korus, which is the transfer test working as intended.
 
-### 8.3 The rest
+### 8.3 The supervised control, predictions 5.1 and 5.2
 
-Not yet run.
+`scripts/train_supervised.py`, 2.8M parameters trained from scratch on CASIA 2.0
+for 40 epochs, then pointed at Korus unchanged. Both scored the same way, tiled at
+native resolution, max over tiles.
+
+| tested on | AUC | |
+|---|---|---|
+| CASIA held-out, 1,887 images | **0.975** | in-distribution |
+| Korus, 277 images | **0.618** | different dataset, different cameras, different editors |
+
+**5.1 HIT** at 0.975 against a 0.95 threshold. **5.2 HIT** at 0.618 against a 0.70
+threshold. Both predictions land, and the gap between them is 35.8 points.
+
+**Put next to the physics arms on the same Korus images:**
+
+| method | Korus AUC |
+|---|---|
+| hand-set physics fusion, Nikon_D7000 | **0.846** |
+| hand-set physics fusion, Nikon_D90 | **0.750** |
+| supervised CNN trained on CASIA | 0.618 |
+
+The supervised model beats every physics detector by a wide margin on the dataset
+it was trained on, and loses to all of them on the dataset it was not. At 0.618 it
+is closer to chance than it is to its own in-distribution score, and it sits
+*below* the 0.708 that dimensions and channel statistics alone reach on CASIA.
+
+This is the bet the repository was built on, and it is now measured rather than
+asserted.
+
+**Two things this is not.** It is not evidence that supervised detection cannot
+transfer; it is evidence that this one, trained on this dataset, does not. And the
+control was not handicapped into losing: it reached 0.975 in-distribution from
+scratch, so whatever it failed at, it did not fail for want of capacity or budget.
+The first attempt did fail that way, plateauing at 0.667 on random crops that
+mostly contained no forgery, and that run was thrown away rather than reported.
+
+### 8.4 The rest
+
+Not yet run: Q2 cross-generator, and the fingerprint initialisation ablation.
 
 ## 9. Amendments
 
