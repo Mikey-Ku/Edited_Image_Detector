@@ -147,6 +147,54 @@ run is not a method.
 
 ## 8. Results
 
+### 8.1 Learned fusion, predictions 5.4 and 5.5
+
+`scripts/learn_fusion.py`, replayed over the evidence already recorded by
+`scripts/evaluate_korus.py`. 224 images, 10 live features after 11 constant ones
+were dropped, cameras as groups. Canon_60D is skipped at 4 images.
+
+**Within a sensor**, stratified 5-fold:
+
+| camera | hand-set | logistic | boosted |
+|---|---|---|---|
+| Nikon_D7000 | **0.846** | 0.806 (-0.040, CI [-0.071, -0.011]) | 0.708 (-0.138, CI [-0.211, -0.073]) |
+| Nikon_D90 | **0.750** | 0.680 (-0.070, CI [-0.133, -0.011]) | 0.591 (-0.160, CI [-0.239, -0.084]) |
+
+**Across sensors**, train one camera and test the other:
+
+| direction | hand-set | logistic | boosted |
+|---|---|---|---|
+| D7000 -> D90 | 0.750 | 0.753 (+0.002, CI [-0.041, +0.046]) | 0.772 (+0.022, CI [-0.016, +0.065]) |
+| D90 -> D7000 | **0.846** | 0.808 (-0.037, CI [-0.095, +0.015]) | 0.751 (-0.095, CI [-0.182, -0.013]) |
+
+**5.4 MISS, and not narrowly.** I predicted learned fusion would beat the hand-set
+weights by at least 0.03 within a sensor. It lost in both cameras, by 0.04 to 0.16,
+with every confidence interval on the paired difference excluding zero. The
+gradient booster, the more flexible model, lost by more than the linear one in
+every single split. That ordering is the tell.
+
+**5.5 MISS, in the surprising direction.** I predicted learned fusion would fail
+across sensors, following the calibration result. Instead the cross-sensor deltas
+are the *better* ones: three of four intervals straddle zero, and boosted actually
+edges ahead going D7000 to D90. Learning did worse where I expected it to do well
+and about the same where I expected it to collapse.
+
+**What this actually says.** Within-sensor 5-fold trains on 88 images with 10
+features. That is not enough data to discover a fusion rule, so the learned models
+fit their fold and the hand-set weights, which encode prior knowledge about what
+each detector means, beat them. Cross-sensor trains on 110 and tests on a disjoint
+110, which is a cleaner and larger fit, and the gap closes. The variable that moves
+the result is training size, not the sensor boundary.
+
+So `fusion/weighted.py` calling its hand-set weights defect 3 of 3 was, on this
+evidence, wrong. At this data scale the hand-set weights are the better estimator
+and the defect note should be rewritten to say so. What is *not* shown is that
+learning cannot help in principle: nothing here rules out a learned fusion winning
+with an order of magnitude more labelled forgeries. It says the fix is not free and
+the repository does not currently have the data to buy it.
+
+### 8.2 The rest
+
 Not yet run.
 
 ## 9. Amendments
