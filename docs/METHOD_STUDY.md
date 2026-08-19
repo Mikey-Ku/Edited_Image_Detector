@@ -100,10 +100,14 @@ within a sensor.
 calibration result. If it does survive, that is more interesting than if it does
 not.
 
-**5.6** A classifier given **only JPEG quantization tables**, no pixels, reaches
->= 0.80 AUC on CASIA v2. If this holds, a large part of what the literature
-reports on this dataset is compression bookkeeping rather than forensics, and
-every CASIA number in this study has to be read in that light.
+**5.6** ~~A classifier given **only JPEG quantization tables**, no pixels, reaches
+>= 0.80 AUC on CASIA v2.~~ **Amended 2026-08-17, before running, see section 9.**
+
+A classifier given **only cheap global statistics** and no forensic feature at all
+(pixel dimensions, aspect ratio, file size, mean and variance per channel, and 8x8
+blockiness energy) reaches >= 0.80 AUC on CASIA v2. If this holds, a large part of
+what the literature reports on this dataset is bookkeeping rather than forensics,
+and every CASIA number in this study has to be read in that light.
 
 **5.7** On generated images the pixel physics tiers score **lower** than on real
 photographs. Not merely uninformative, actively inverted.
@@ -144,3 +148,30 @@ run is not a method.
 ## 8. Results
 
 Not yet run.
+
+## 9. Amendments
+
+Changes made to this document after it was first committed. Each says what
+changed, when, and why, so the record shows the reasoning rather than just the
+final wording.
+
+**2026-08-17, prediction 5.6, before any experiment was run.** The CASIA 2.0
+mirror used by `scripts/fetch_casia.py` re-encodes every image to PNG:
+`Au_ani_30215.jpg.png` opens as PNG and carries no quantization tables. The
+original-JPEG shortcut therefore cannot be measured on this copy, because the
+headers that would carry it no longer exist.
+
+Two things follow, and they point in opposite directions. The measurement I wanted
+is impossible here. But the shortcut itself is also *absent* from the data every
+other arm sees, which makes this copy of CASIA a fairer training set than the
+original, not a worse one. The supervised control cannot win by reading a header
+that is not there.
+
+What survives re-encoding is still worth probing, so 5.6 now asks a weaker version
+of the same question: how much of CASIA can be solved with no forensic feature at
+all. Pixel-level 8x8 blocking survives a PNG round-trip, and so do the resolution
+and file-size distributions, which are a documented source of bias in this dataset.
+
+The stronger quantization-table probe stays on the table if the original JPEG
+release is obtained later. If that happens it will be added as a separate
+prediction with its own number rather than by editing this one.
