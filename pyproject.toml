@@ -36,6 +36,12 @@ learned = ["torch>=2.0"]
 # and the pixel tiers do not need it, but it is the only thing in the project that
 # can speak to a fully generated image, so a claims deployment wants it.
 provenance = ["c2pa-python>=0.37"]
+# docs/METHOD_STUDY.md only. scikit-learn is deliberately absent from the shipped
+# library: the calibration in fusion/calibration.py is hand-implemented on numpy so
+# that a deployment carries no ML runtime it does not need. The study is different.
+# It has to build the alternatives fairly, and hand-rolling a gradient booster to
+# lose to would be a strawman. pyarrow reads the synthbuster parquet shards.
+study = ["torch>=2.0", "scikit-learn>=1.4", "pyarrow>=15.0"]
 
 [project.scripts]
 groundtruth = "groundtruth.api.cli:main"
