@@ -193,7 +193,35 @@ learning cannot help in principle: nothing here rules out a learned fusion winni
 with an order of magnitude more labelled forgeries. It says the fix is not free and
 the repository does not currently have the data to buy it.
 
-### 8.2 The rest
+### 8.2 The CASIA shortcut floor, prediction 5.6 (amended)
+
+`scripts/probe_shortcut.py` over all 12,614 images. No forensic feature of any
+kind: no mask, no local structure, no comparison between regions. Stratified
+5-fold, ROC AUC.
+
+| feature set | logistic | boosted |
+|---|---|---|
+| shape (dimensions, aspect, pixel count, file size, bytes per pixel) | 0.633 | 0.647 |
+| stats (per-channel mean and standard deviation) | 0.642 | 0.655 |
+| both | 0.694 | **0.708** |
+
+**MISS.** I predicted at least 0.80 and got 0.708.
+
+**The number matters more than the verdict.** A classifier that has never looked
+at a forgery, and cannot, separates CASIA's two halves at 0.708. The floor for
+this dataset is therefore not 0.5, and any CASIA figure in this study has to be
+read against 0.708 rather than against chance. A model reporting 0.95 on CASIA has
+earned 0.24 of separation over knowing nothing, not 0.45.
+
+The two feature sets are partly complementary, 0.647 and 0.655 alone against 0.708
+together, so the tell is not a single artefact. CASIA's authentic and tampered
+halves differ in both what the images are of and how big they are.
+
+This does not indict the dataset for the use it is put to here. CASIA is the
+training set, and a model that learns a resolution prior from it will simply not
+find that prior on Korus, which is the transfer test working as intended.
+
+### 8.3 The rest
 
 Not yet run.
 
